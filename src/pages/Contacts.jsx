@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Plus, Trash2, Upload, Search, Users } from 'lucide-react';
 import { Card, Button, Input, Modal, Alert } from '../components/UI';
 import { contactsAPI } from '../services/api';
@@ -12,6 +12,7 @@ export default function Contacts() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmails, setNewEmails] = useState('');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadContacts();
@@ -74,15 +75,22 @@ export default function Contacts() {
     const file = e.target.files[0];
     if (!file) return;
 
+    setError('');
+    setSuccess('');
+
     try {
       const result = await contactsAPI.upload(file);
       setContacts(result.contacts);
       setSuccess(`Uploaded ${result.count} contacts`);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to upload contacts');
     }
     
     e.target.value = '';
+  }
+
+  function handleImportClick() {
+    fileInputRef.current?.click();
   }
 
   const filteredContacts = contacts.filter(c =>
@@ -105,13 +113,17 @@ export default function Contacts() {
           <p className="text-gray-500 mt-1">{contacts.length} email addresses</p>
         </div>
         <div className="flex gap-3">
-          <label className="cursor-pointer">
-            <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-            <Button variant="outline">
-              <Upload className="w-4 h-4 mr-2" />
-              Import CSV
-            </Button>
-          </label>
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            accept=".csv" 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <Button variant="outline" onClick={handleImportClick}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </Button>
           <Button onClick={() => setIsModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Add Contacts

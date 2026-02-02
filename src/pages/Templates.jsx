@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Plus, Trash2, Edit, Upload, Eye } from 'lucide-react';
 import { Card, Button, Input, TextArea, Modal, Alert } from '../components/UI';
 import { templatesAPI } from '../services/api';
@@ -14,6 +14,7 @@ export default function Templates() {
   const [formData, setFormData] = useState({ subject: '', body: '' });
   
   const [previewTemplate, setPreviewTemplate] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadTemplates();
@@ -82,15 +83,22 @@ export default function Templates() {
     const file = e.target.files[0];
     if (!file) return;
 
+    setError('');
+    setSuccess('');
+
     try {
       const result = await templatesAPI.upload(file);
       setTemplates(result.templates);
       setSuccess(`Uploaded ${result.count} templates`);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to upload templates');
     }
     
     e.target.value = '';
+  }
+
+  function handleImportClick() {
+    fileInputRef.current?.click();
   }
 
   if (loading) {
@@ -109,13 +117,17 @@ export default function Templates() {
           <p className="text-gray-500 mt-1">Create and manage your email templates</p>
         </div>
         <div className="flex gap-3">
-          <label className="cursor-pointer">
-            <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-            <Button variant="outline">
-              <Upload className="w-4 h-4 mr-2" />
-              Import JSON
-            </Button>
-          </label>
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            accept=".json" 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <Button variant="outline" onClick={handleImportClick}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import JSON
+          </Button>
           <Button onClick={openAddModal}>
             <Plus className="w-4 h-4 mr-2" />
             Add Template
