@@ -80,6 +80,10 @@ export default function SendEmails() {
       return;
     }
 
+    console.log('Starting campaign...');
+    console.log('Selected contacts:', selectedContacts);
+    console.log('Selected templates:', selectedTemplates);
+
     setError('');
     setSuccess('');
     setIsSending(true);
@@ -124,11 +128,15 @@ export default function SendEmails() {
       }));
 
       try {
-        await sendAPI.sendSingle(email, template, senderName);
+        console.log('Sending email to:', email);
+        console.log('Using template:', template.subject);
+        const result = await sendAPI.sendSingle(email, template, senderName);
+        console.log('Send result:', result);
         sentCount++;
         addLog(`✓ Sent to ${email} (Template #${templateIndex + 1})`, 'success');
         setProgress(prev => ({ ...prev, sent: sentCount }));
       } catch (err) {
+        console.error('Send error:', err);
         failedList.push({ email, error: err.message });
         addLog(`✗ Failed for ${email}: ${err.message}`, 'error');
         setProgress(prev => ({ ...prev, failed: failedList }));
