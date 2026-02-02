@@ -1,7 +1,9 @@
 // API Configuration
 // This file reads from .env file for easy deployment updates
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Remove trailing slash if present
+const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
+export const API_BASE_URL = baseUrl;
 
 export const API_ENDPOINTS = {
   // Config
