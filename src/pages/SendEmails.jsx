@@ -6,7 +6,6 @@ import { templatesAPI, contactsAPI, sendAPI } from '../services/api';
 export default function SendEmails() {
   const [templates, setTemplates] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [status, setStatus] = useState({ isSending: false, progress: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -20,28 +19,36 @@ export default function SendEmails() {
   const [testEmail, setTestEmail] = useState('');
   const [testTemplateIndex, setTestTemplateIndex] = useState(0);
   
+  // Campaign state (controlled by frontend for Vercel compatibility)
+  const [isSending, setIsSending] = useState(false);
+  const [progress, setProgress] = useState({
+    sent: 0,
+    total: 0,
+    current: '',
+    failed: [],
+    logs: [],
+    currentTemplate: null,
+    delaySeconds: 0,
+  });
+  const stopRequestedRef = useRef(false);
   const logsEndRef = useRef(null);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadStatus, 1000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [status.progress?.logs]);
+  }, [progress.logs]);
 
   async function loadData() {
     try {
-      const [templatesData, contactsData, statusData] = await Promise.all([
+      const [templatesData, contactsData] = await Promise.all([
         templatesAPI.getAll(),
         contactsAPI.getAll(),
-        sendAPI.getStatus(),
       ]);
       setTemplates(templatesData);
       setContacts(contactsData);
-      setStatus(statusData);
       setSelectedTemplates(templatesData.map((_, i) => i));
       setSelectedContacts(contactsData);
     } catch (err) {
@@ -51,13 +58,16 @@ export default function SendEmails() {
     }
   }
 
-  async function loadStatus() {
-    try {
-      const statusData = await sendAPI.getStatus();
-      setStatus(statusData);
-    } catch (err) {
-      console.error('Failed to load status:', err);
-    }
+  function addLog(message, type = 'info') {
+    setProgress(prev => ({
+      ...prev,
+      logs: [...prev.logs, {
+        time: new Date().toISOString(),
+        message,
+        success: type === 'success' ? true : type === 'error' ? false : undefined,
+        info: type === 'info',
+      }]
+    }));
   }
 
   async function handleStart() {
@@ -70,27 +80,88 @@ export default function SendEmails() {
       return;
     }
 
-    try {
-      await sendAPI.start({
-        selectedContacts,
-        selectedTemplates,
-        delayMin: Number(delayMin),
-        delayMax: Number(delayMax),
-        senderName,
-      });
-      setSuccess('Email sending started');
-    } catch (err) {
-      setError(err.message);
+    setError('');
+    setSuccess('');
+    setIsSending(true);
+    stopRequestedRef.current = false;
+    
+    const selectedTemplateObjects = selectedTemplates.map(i => templates[i]).filter(Boolean);
+    
+    setProgress({
+      sent: 0,
+      total: selectedContacts.length,
+      current: '',
+      failed: [],
+      logs: [],
+      currentTemplate: null,
+      delaySeconds: 0,
+    });
+
+    addLog(`Starting campaign: ${selectedContacts.length} contacts, ${selectedTemplateObjects.length} templates`);
+
+    let templateIndex = 0;
+    let sentCount = 0;
+    const failedList = [];
+
+    for (let i = 0; i < selectedContacts.length; i++) {
+      if (stopRequestedRef.current) {
+        addLog('Campaign stopped by user', 'info');
+        break;
+      }
+
+      const contact = selectedContacts[i];
+      const email = contact.email || contact;
+      const template = selectedTemplateObjects[templateIndex];
+      
+      setProgress(prev => ({
+        ...prev,
+        current: email,
+        currentTemplate: {
+          index: templateIndex + 1,
+          subject: template.subject,
+          total: selectedTemplateObjects.length
+        }
+      }));
+
+      try {
+        await sendAPI.sendSingle(email, template, senderName);
+        sentCount++;
+        addLog(`✓ Sent to ${email} (Template #${templateIndex + 1})`, 'success');
+        setProgress(prev => ({ ...prev, sent: sentCount }));
+      } catch (err) {
+        failedList.push({ email, error: err.message });
+        addLog(`✗ Failed for ${email}: ${err.message}`, 'error');
+        setProgress(prev => ({ ...prev, failed: failedList }));
+      }
+
+      templateIndex = (templateIndex + 1) % selectedTemplateObjects.length;
+
+      // Delay before next email (if not last)
+      if (i < selectedContacts.length - 1 && !stopRequestedRef.current) {
+        const delay = Math.floor(Math.random() * (delayMax - delayMin) + delayMin);
+        setProgress(prev => ({ ...prev, delaySeconds: delay }));
+        addLog(`Waiting ${delay} seconds...`, 'info');
+        
+        await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        setProgress(prev => ({ ...prev, delaySeconds: 0 }));
+      }
     }
+
+    setProgress(prev => ({
+      ...prev,
+      current: '',
+      currentTemplate: null,
+      delaySeconds: 0,
+    }));
+    
+    addLog(`Completed! Sent: ${sentCount}/${selectedContacts.length}, Failed: ${failedList.length}`, 'info');
+    setIsSending(false);
+    setSuccess(`Campaign completed! Sent ${sentCount} emails.`);
   }
 
-  async function handleStop() {
-    try {
-      await sendAPI.stop();
-      setSuccess('Stop requested');
-    } catch (err) {
-      setError(err.message);
-    }
+  function handleStop() {
+    stopRequestedRef.current = true;
+    addLog('Stop requested...', 'info');
   }
 
   async function handleTestEmail() {
@@ -99,6 +170,7 @@ export default function SendEmails() {
       return;
     }
 
+    setError('');
     try {
       await sendAPI.test(testEmail, testTemplateIndex);
       setSuccess(`Test email sent to ${testEmail}`);
@@ -123,7 +195,6 @@ export default function SendEmails() {
     );
   }
 
-  const progress = status.progress || {};
   const progressPercent = progress.total > 0 ? (progress.sent / progress.total) * 100 : 0;
 
   return (
@@ -201,7 +272,7 @@ export default function SendEmails() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              {status.isSending ? (
+              {isSending ? (
                 <Button variant="danger" onClick={handleStop} className="flex-1">
                   <Square className="w-4 h-4 mr-2" />
                   Stop Sending
@@ -253,18 +324,18 @@ export default function SendEmails() {
       </div>
 
       {/* Progress */}
-      {(status.isSending || progress.sent > 0) && (
+      {(isSending || progress.sent > 0) && (
         <Card title="Campaign Progress">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {status.isSending && (
+                {isSending && (
                   <div className="animate-pulse">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   </div>
                 )}
-                <Badge variant={status.isSending ? 'success' : 'default'}>
-                  {status.isSending ? 'Sending' : 'Completed'}
+                <Badge variant={isSending ? 'success' : 'default'}>
+                  {isSending ? 'Sending' : 'Completed'}
                 </Badge>
               </div>
               <span className="text-lg font-semibold">

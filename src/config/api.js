@@ -28,4 +28,5 @@ export const API_ENDPOINTS = {
   SEND_START: `${API_BASE_URL}/api/send/start`,
   SEND_STOP: `${API_BASE_URL}/api/send/stop`,
   SEND_TEST: `${API_BASE_URL}/api/send/test`,
+  SEND_SINGLE: `${API_BASE_URL}/api/send/single`,
 };
