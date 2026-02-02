@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail } from 'lucide-react';
+import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge } from '../components/UI';
 import { templatesAPI, contactsAPI, sendAPI } from '../services/api';
 import { useCampaign } from '../context/CampaignContext';
@@ -25,9 +25,21 @@ export default function SendEmails() {
 
   useEffect(() => {
     loadData();
+    
+    // Reload data when component becomes visible or window gains focus
+    const handleFocus = () => {
+      loadData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   async function loadData() {
+    setLoading(true);
     try {
       const [templatesData, contactsData] = await Promise.all([
         templatesAPI.getAll(),
@@ -35,8 +47,14 @@ export default function SendEmails() {
       ]);
       setTemplates(templatesData);
       setContacts(contactsData);
-      setSelectedTemplates(templatesData.map((_, i) => i));
-      setSelectedContacts(contactsData);
+      
+      // Only auto-select all if none are selected
+      if (selectedTemplates.length === 0) {
+        setSelectedTemplates(templatesData.map((_, i) => i));
+      }
+      if (selectedContacts.length === 0) {
+        setSelectedContacts(contactsData);
+      }
     } catch (err) {
       setError('Failed to load data');
     } finally {
@@ -125,9 +143,19 @@ export default function SendEmails() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Send Emails</h2>
-        <p className="text-gray-500 mt-1">Configure and start your email campaign</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Send Emails</h2>
+          <p className="text-gray-500 mt-1">Configure and start your email campaign</p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={loadData}
+          disabled={loading}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {error && <Alert type="error" message={error} />}
@@ -213,7 +241,7 @@ export default function SendEmails() {
                   <Button 
                     onClick={handleStart} 
                     className="flex-1" 
-                    disabled={templates.length === 0 || contacts.length === 0}
+                    disabled={selectedTemplates.length === 0 || selectedContacts.length === 0 || loading}
                   >
                     <Play className="w-4 h-4 mr-2" />
                     Start Campaign
