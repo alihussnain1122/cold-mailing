@@ -100,8 +100,15 @@ export const sendAPI = {
     method: 'POST',
     body: JSON.stringify({ email, templateIndex }),
   }),
-  sendSingle: (email, template, senderName) => fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
+  sendSingle: (emailData) => fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
     method: 'POST',
-    body: JSON.stringify({ email, template, senderName }),
+    body: JSON.stringify({
+      email: emailData.to,
+      template: {
+        subject: emailData.subject,
+        body: emailData.html
+      },
+      senderName: emailData.name || 'Ali'
+    }),
   }),
 };

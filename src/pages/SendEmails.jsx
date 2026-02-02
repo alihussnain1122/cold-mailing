@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge } from '../components/UI';
 import { templatesAPI, contactsAPI, sendAPI } from '../services/api';
+import { useCampaign } from '../context/CampaignContext';
 
 export default function SendEmails() {
   const [templates, setTemplates] = useState([]);
@@ -18,28 +19,13 @@ export default function SendEmails() {
   
   const [testEmail, setTestEmail] = useState('');
   const [testTemplateIndex, setTestTemplateIndex] = useState(0);
-  
-  // Campaign state (controlled by frontend for Vercel compatibility)
-  const [isSending, setIsSending] = useState(false);
-  const [progress, setProgress] = useState({
-    sent: 0,
-    total: 0,
-    current: '',
-    failed: [],
-    logs: [],
-    currentTemplate: null,
-    delaySeconds: 0,
-  });
-  const stopRequestedRef = useRef(false);
-  const logsEndRef = useRef(null);
+
+  // Use campaign context
+  const campaign = useCampaign();
 
   useEffect(() => {
     loadData();
   }, []);
-
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [progress.logs]);
 
   async function loadData() {
     try {
@@ -58,18 +44,6 @@ export default function SendEmails() {
     }
   }
 
-  function addLog(message, type = 'info') {
-    setProgress(prev => ({
-      ...prev,
-      logs: [...prev.logs, {
-        time: new Date().toISOString(),
-        message,
-        success: type === 'success' ? true : type === 'error' ? false : undefined,
-        info: type === 'info',
-      }]
-    }));
-  }
-
   async function handleStart() {
     if (selectedContacts.length === 0) {
       setError('Please select at least one contact');
@@ -80,96 +54,40 @@ export default function SendEmails() {
       return;
     }
 
-    console.log('Starting campaign...');
-    console.log('Selected contacts:', selectedContacts);
-    console.log('Selected templates:', selectedTemplates);
-
     setError('');
     setSuccess('');
-    setIsSending(true);
-    stopRequestedRef.current = false;
     
     const selectedTemplateObjects = selectedTemplates.map(i => templates[i]).filter(Boolean);
-    
-    setProgress({
-      sent: 0,
-      total: selectedContacts.length,
-      current: '',
-      failed: [],
-      logs: [],
-      currentTemplate: null,
-      delaySeconds: 0,
+
+    // Prepare campaign data with template rotation
+    const campaignContacts = selectedContacts.map((contact, index) => {
+      const templateIndex = index % selectedTemplateObjects.length;
+      const template = selectedTemplateObjects[templateIndex];
+      return {
+        email: contact.email || contact,
+        name: contact.name || '',
+        company: contact.company || '',
+        template
+      };
     });
 
-    addLog(`Starting campaign: ${selectedContacts.length} contacts, ${selectedTemplateObjects.length} templates`);
+    // Start campaign using context
+    campaign.startCampaign(
+      campaignContacts,
+      { delayMin: delayMin * 1000, delayMax: delayMax * 1000 } // Convert to milliseconds
+    );
 
-    let templateIndex = 0;
-    let sentCount = 0;
-    const failedList = [];
-
-    for (let i = 0; i < selectedContacts.length; i++) {
-      if (stopRequestedRef.current) {
-        addLog('Campaign stopped by user', 'info');
-        break;
-      }
-
-      const contact = selectedContacts[i];
-      const email = contact.email || contact;
-      const template = selectedTemplateObjects[templateIndex];
-      
-      setProgress(prev => ({
-        ...prev,
-        current: email,
-        currentTemplate: {
-          index: templateIndex + 1,
-          subject: template.subject,
-          total: selectedTemplateObjects.length
-        }
-      }));
-
-      try {
-        console.log('Sending email to:', email);
-        console.log('Using template:', template.subject);
-        const result = await sendAPI.sendSingle(email, template, senderName);
-        console.log('Send result:', result);
-        sentCount++;
-        addLog(`✓ Sent to ${email} (Template #${templateIndex + 1})`, 'success');
-        setProgress(prev => ({ ...prev, sent: sentCount }));
-      } catch (err) {
-        console.error('Send error:', err);
-        failedList.push({ email, error: err.message });
-        addLog(`✗ Failed for ${email}: ${err.message}`, 'error');
-        setProgress(prev => ({ ...prev, failed: failedList }));
-      }
-
-      templateIndex = (templateIndex + 1) % selectedTemplateObjects.length;
-
-      // Delay before next email (if not last)
-      if (i < selectedContacts.length - 1 && !stopRequestedRef.current) {
-        const delay = Math.floor(Math.random() * (delayMax - delayMin) + delayMin);
-        setProgress(prev => ({ ...prev, delaySeconds: delay }));
-        addLog(`Waiting ${delay} seconds...`, 'info');
-        
-        await new Promise(resolve => setTimeout(resolve, delay * 1000));
-        setProgress(prev => ({ ...prev, delaySeconds: 0 }));
-      }
-    }
-
-    setProgress(prev => ({
-      ...prev,
-      current: '',
-      currentTemplate: null,
-      delaySeconds: 0,
-    }));
-    
-    addLog(`Completed! Sent: ${sentCount}/${selectedContacts.length}, Failed: ${failedList.length}`, 'info');
-    setIsSending(false);
-    setSuccess(`Campaign completed! Sent ${sentCount} emails.`);
+    setSuccess('Campaign started! You can navigate to other pages while it runs.');
   }
 
   function handleStop() {
-    stopRequestedRef.current = true;
-    addLog('Stop requested...', 'info');
+    campaign.stopCampaign();
+  }
+
+  function handleReset() {
+    campaign.resetCampaign();
+    setSuccess('');
+    setError('');
   }
 
   async function handleTestEmail() {
@@ -203,7 +121,7 @@ export default function SendEmails() {
     );
   }
 
-  const progressPercent = progress.total > 0 ? (progress.sent / progress.total) * 100 : 0;
+  const progressPercent = campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -280,16 +198,32 @@ export default function SendEmails() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              {isSending ? (
-                <Button variant="danger" onClick={handleStop} className="flex-1">
-                  <Square className="w-4 h-4 mr-2" />
-                  Stop Sending
-                </Button>
+              {campaign.isRunning ? (
+                <>
+                  <Button variant="danger" onClick={handleStop} className="flex-1">
+                    <Square className="w-4 h-4 mr-2" />
+                    Stop Campaign
+                  </Button>
+                  <Button variant="outline" onClick={handleReset}>
+                    Reset
+                  </Button>
+                </>
               ) : (
-                <Button onClick={handleStart} className="flex-1" disabled={templates.length === 0 || contacts.length === 0}>
-                  <Play className="w-4 h-4 mr-2" />
-                  Start Campaign
-                </Button>
+                <>
+                  <Button 
+                    onClick={handleStart} 
+                    className="flex-1" 
+                    disabled={templates.length === 0 || contacts.length === 0}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Campaign
+                  </Button>
+                  {campaign.status !== 'idle' && (
+                    <Button variant="outline" onClick={handleReset}>
+                      Reset
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -332,22 +266,27 @@ export default function SendEmails() {
       </div>
 
       {/* Progress */}
-      {(isSending || progress.sent > 0) && (
+      {campaign.status !== 'idle' && (
         <Card title="Campaign Progress">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {isSending && (
+                {campaign.isRunning && (
                   <div className="animate-pulse">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   </div>
                 )}
-                <Badge variant={isSending ? 'success' : 'default'}>
-                  {isSending ? 'Sending' : 'Completed'}
+                <Badge variant={
+                  campaign.status === 'running' ? 'success' :
+                  campaign.status === 'completed' ? 'default' :
+                  campaign.status === 'paused' ? 'warning' :
+                  'error'
+                }>
+                  {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
                 </Badge>
               </div>
               <span className="text-lg font-semibold">
-                {progress.sent || 0} / {progress.total || 0}
+                {campaign.sent || 0} / {campaign.total || 0}
               </span>
             </div>
 
@@ -358,75 +297,43 @@ export default function SendEmails() {
               ></div>
             </div>
 
-            {progress.current && (
+            {campaign.currentEmail && (
               <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
                 <Mail className="w-4 h-4" />
-                <span>Sending to: <strong>{progress.current}</strong></span>
+                <div className="flex-1">
+                  <div>Sending to: <strong>{campaign.currentEmail}</strong></div>
+                  {campaign.currentTemplate && (
+                    <div className="text-xs text-gray-500 mt-1">Template: {campaign.currentTemplate}</div>
+                  )}
+                </div>
               </div>
             )}
 
-            {progress.currentTemplate && (
-              <div className="text-sm text-gray-500">
-                Using template {progress.currentTemplate.index} of {progress.currentTemplate.total}
+            {campaign.nextEmailIn > 0 && (
+              <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded-lg p-3">
+                <Clock className="w-4 h-4 animate-pulse" />
+                <span className="font-medium">Next email in {campaign.nextEmailIn} seconds</span>
               </div>
             )}
 
-            {progress.delaySeconds > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="w-4 h-4" />
-                <span>Waiting {progress.delaySeconds}s before next email...</span>
-              </div>
-            )}
-
-            {progress.failed?.length > 0 && (
+            {campaign.failed > 0 && (
               <div className="bg-red-50 rounded-lg p-3">
-                <p className="text-sm font-medium text-red-700 mb-2">
-                  Failed: {progress.failed.length}
+                <p className="text-sm font-medium text-red-700">
+                  Failed: {campaign.failed}
                 </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {progress.failed.map((f, i) => (
-                    <p key={i} className="text-xs text-red-600">
-                      {f.email}: {f.error}
-                    </p>
-                  ))}
-                </div>
               </div>
             )}
-          </div>
-        </Card>
-      )}
 
-      {/* Logs */}
-      {progress.logs?.length > 0 && (
-        <Card title="Activity Log">
-          <div className="space-y-1 max-h-80 overflow-y-auto font-mono text-sm">
-            {progress.logs.map((log, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-2 p-2 rounded ${
-                  log.success === true ? 'bg-green-50' :
-                  log.success === false ? 'bg-red-50' :
-                  'bg-gray-50'
-                }`}
-              >
-                {log.success === true && <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />}
-                {log.success === false && <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />}
-                {log.info && <Clock className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <span className={`${
-                    log.success === true ? 'text-green-700' :
-                    log.success === false ? 'text-red-700' :
-                    'text-gray-700'
-                  }`}>
-                    {log.message}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">
-                  {new Date(log.time).toLocaleTimeString()}
-                </span>
-              </div>
-            ))}
-            <div ref={logsEndRef} />
+            {campaign.error && (
+              <Alert type="error" message={campaign.error} />
+            )}
+
+            {campaign.status === 'completed' && (
+              <Alert 
+                type="success" 
+                message={`Campaign completed! Sent ${campaign.sent} emails successfully.`} 
+              />
+            )}
           </div>
         </Card>
       )}

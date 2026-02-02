@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import { Dashboard, Templates, Contacts, SendEmails, Settings } from './pages';
+import { CampaignProvider } from './context/CampaignContext';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,14 +25,16 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="flex">
-        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <main className="flex-1 p-8">
-          {renderPage()}
-        </main>
+    <CampaignProvider>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex">
+          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+          <main className="flex-1 p-8">
+            {renderPage()}
+          </main>
+        </div>
       </div>
-    </div>
+    </CampaignProvider>
   );
 }
