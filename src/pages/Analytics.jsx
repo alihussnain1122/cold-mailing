@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Eye, MousePointer, XCircle, UserX, RefreshCw, Mail, TrendingUp } from 'lucide-react';
+import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp } from 'lucide-react';
 import { Card, Badge, Button, PageLoader } from '../components/UI';
-import { trackingService, bouncedEmailsService, unsubscribedService, campaignService } from '../services/supabase';
+import { trackingService, bouncedEmailsService, campaignService } from '../services/supabase';
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
@@ -10,7 +10,6 @@ export default function Analytics() {
   const [campaignStats, setCampaignStats] = useState(null);
   const [trackingEvents, setTrackingEvents] = useState([]);
   const [bouncedEmails, setBouncedEmails] = useState([]);
-  const [unsubscribedEmails, setUnsubscribedEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -26,14 +25,12 @@ export default function Analytics() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [campaignsData, bounced, unsubscribed] = await Promise.all([
+      const [campaignsData, bounced] = await Promise.all([
         campaignService.getAll(),
         bouncedEmailsService.getAll(),
-        unsubscribedService.getAll(),
       ]);
       setCampaigns(campaignsData);
       setBouncedEmails(bounced);
-      setUnsubscribedEmails(unsubscribed);
       if (campaignsData.length > 0) {
         setSelectedCampaign(campaignsData[0].id);
       }
@@ -66,7 +63,6 @@ export default function Analytics() {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'bounced', label: 'Bounced', count: bouncedEmails.length },
-    { id: 'unsubscribed', label: 'Unsubscribed', count: unsubscribedEmails.length },
   ];
 
   return (
@@ -184,7 +180,6 @@ export default function Analytics() {
                           {event.tracking_type === 'open' && <Eye className="w-4 h-4 text-green-600" />}
                           {event.tracking_type === 'click' && <MousePointer className="w-4 h-4 text-violet-600" />}
                           {event.tracking_type === 'bounce' && <XCircle className="w-4 h-4 text-red-600" />}
-                          {event.tracking_type === 'unsubscribe' && <UserX className="w-4 h-4 text-gray-600" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 truncate">{event.email}</div>
@@ -276,49 +271,7 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* Unsubscribed Tab */}
-      {activeTab === 'unsubscribed' && (
-        <div className="bg-white border border-gray-200 rounded-xl">
-          <div className="p-5 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Unsubscribed Contacts</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              These contacts opted out and will be automatically skipped in future campaigns
-            </p>
-          </div>
-          {unsubscribedEmails.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {unsubscribedEmails.map(email => (
-                    <tr key={email.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-5 text-sm text-gray-900">{email.email}</td>
-                      <td className="py-3 px-5 text-sm text-gray-500">{email.reason || '—'}</td>
-                      <td className="py-3 px-5 text-sm text-gray-500">
-                        {new Date(email.unsubscribed_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-8">
-              <EmptyState
-                icon={UserX}
-                title="No unsubscribed contacts"
-                description="No one has opted out yet"
-              />
-            </div>
-          )}
-        </div>
-      )}
+
     </div>
   );
 }
