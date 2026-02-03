@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -24,17 +24,30 @@ function AppLayout({ children }) {
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 via-white to-purple-100">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-100 via-white to-purple-100">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
+  // If not logged in, show Auth page but remember where they wanted to go
   if (!user) {
+    // If they're trying to access a protected route, save it for after login
+    if (location.pathname !== '/login' && location.pathname !== '/') {
+      sessionStorage.setItem('redirectAfterLogin', location.pathname);
+    }
     return <Auth />;
+  }
+
+  // Check if there's a saved redirect path after login
+  const savedPath = sessionStorage.getItem('redirectAfterLogin');
+  if (savedPath) {
+    sessionStorage.removeItem('redirectAfterLogin');
+    return <Navigate to={savedPath} replace />;
   }
 
   return (
@@ -46,6 +59,7 @@ function ProtectedRoutes() {
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/send" element={<SendEmails />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppLayout>
