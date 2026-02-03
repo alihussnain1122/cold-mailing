@@ -169,7 +169,7 @@ export const contactsService = {
 };
 
 // ==================
-// SMTP CONFIG (optional - can also use localStorage)
+// SMTP CONFIG - Synced across devices
 // ==================
 export const smtpService = {
   async get() {
@@ -179,7 +179,20 @@ export const smtpService = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
-    return data;
+    
+    if (data) {
+      // Get password from localStorage (device-specific for security)
+      const storedPass = localStorage.getItem(`smtp_pass_${data.id}`);
+      return {
+        id: data.id,
+        smtpHost: data.smtp_host,
+        smtpPort: data.smtp_port?.toString() || '587',
+        emailUser: data.email_user,
+        emailPass: storedPass || '',
+        senderName: data.sender_name || 'Support Team',
+      };
+    }
+    return null;
   },
 
   async save(config) {
@@ -194,11 +207,18 @@ export const smtpService = {
         smtp_port: parseInt(config.smtpPort) || 587,
         email_user: config.emailUser,
         sender_name: config.senderName || 'Support Team',
-      })
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
       .select()
       .single();
     
     if (error) throw error;
+    
+    // Store password in localStorage (device-specific for security)
+    if (config.emailPass) {
+      localStorage.setItem(`smtp_pass_${data.id}`, config.emailPass);
+    }
+    
     return data;
   },
 
@@ -206,11 +226,27 @@ export const smtpService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Get config ID first to clear localStorage
+    const { data: config } = await supabase
+      .from('smtp_configs')
+      .select('id')
+      .single();
+    
+    if (config) {
+      localStorage.removeItem(`smtp_pass_${config.id}`);
+    }
+
     const { error } = await supabase
       .from('smtp_configs')
       .delete()
       .eq('user_id', user.id);
     
     if (error) throw error;
+  },
+
+  // Check if configured (has all required fields)
+  async isConfigured() {
+    const config = await this.get();
+    return !!(config?.smtpHost && config?.emailUser && config?.emailPass);
   }
 };

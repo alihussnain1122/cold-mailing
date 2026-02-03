@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from '../config/api';
-import { getCredentialsForRequest, getCredentials, isConfigured } from './credentials';
+import { smtpService } from './supabase';
 
 // Error types for better handling
 export class NetworkError extends Error {
@@ -47,19 +47,20 @@ async function fetchAPI(url, options = {}) {
   }
 }
 
-// Config API - Now reads from localStorage
+// Config API - Now reads from Supabase
 export const configAPI = {
-  get: () => {
-    const creds = getCredentials();
-    return Promise.resolve({
-      configured: isConfigured(),
+  get: async () => {
+    const creds = await smtpService.get();
+    const isConfigured = !!(creds?.smtpHost && creds?.emailUser && creds?.emailPass);
+    return {
+      configured: isConfigured,
       smtpHost: creds?.smtpHost || '',
       smtpPort: creds?.smtpPort || '587',
       emailUser: creds?.emailUser || '',
       senderName: creds?.senderName || 'Support Team',
-    });
+    };
   },
-  // Update is handled by credentials service directly in Settings page
+  // Update is handled by smtpService directly in Settings page
   update: () => Promise.resolve({ success: true }),
 };
 
@@ -141,13 +142,20 @@ export const contactsAPI = {
   },
 };
 
-// Email Sending API - Now includes credentials from localStorage
+// Email Sending API - Now includes credentials from Supabase
 export const sendAPI = {
-  test: (email, templateIndex) => {
-    const credentials = getCredentialsForRequest();
-    if (!credentials) {
-      return Promise.reject(new Error('SMTP not configured. Please set up your credentials in Settings.'));
+  test: async (email, templateIndex) => {
+    const creds = await smtpService.get();
+    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+      throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
+    const credentials = {
+      smtpHost: creds.smtpHost,
+      smtpPort: creds.smtpPort,
+      emailUser: creds.emailUser,
+      emailPass: creds.emailPass,
+      senderName: creds.senderName,
+    };
     return fetchAPI(API_ENDPOINTS.SEND_TEST, {
       method: 'POST',
       body: JSON.stringify({ 
@@ -157,11 +165,18 @@ export const sendAPI = {
       }),
     });
   },
-  sendSingle: (emailData) => {
-    const credentials = getCredentialsForRequest();
-    if (!credentials) {
-      return Promise.reject(new Error('SMTP not configured. Please set up your credentials in Settings.'));
+  sendSingle: async (emailData) => {
+    const creds = await smtpService.get();
+    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+      throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
+    const credentials = {
+      smtpHost: creds.smtpHost,
+      smtpPort: creds.smtpPort,
+      emailUser: creds.emailUser,
+      emailPass: creds.emailPass,
+      senderName: creds.senderName,
+    };
     return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
       method: 'POST',
       body: JSON.stringify({

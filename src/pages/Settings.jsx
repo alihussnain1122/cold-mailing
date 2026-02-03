@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
-import { getCredentials, saveCredentials, clearCredentials, isConfigured, isSecureContext } from '../services/credentials';
+import { smtpService } from '../services/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export default function Settings() {
+  const { user } = useAuth();
   const [config, setConfig] = useState({
     smtpHost: '',
     smtpPort: '587',
@@ -13,6 +15,7 @@ export default function Settings() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [configured, setConfigured] = useState(false);
@@ -21,8 +24,8 @@ export default function Settings() {
 
   useEffect(() => {
     loadConfig();
-    setSecureConnection(isSecureContext());
-  }, []);
+    setSecureConnection(window.isSecureContext || location.hostname === 'localhost');
+  }, [user]);
 
   // Auto-dismiss messages
   useEffect(() => {
@@ -35,21 +38,33 @@ export default function Settings() {
     }
   }, [error, success]);
 
-  function loadConfig() {
-    const creds = getCredentials();
-    if (creds) {
-      setConfig({
-        smtpHost: creds.smtpHost || '',
-        smtpPort: creds.smtpPort || '587',
-        emailUser: creds.emailUser || '',
-        emailPass: creds.emailPass || '',
-        senderName: creds.senderName || 'Support Team',
-      });
+  async function loadConfig() {
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setConfigured(isConfigured());
+    
+    try {
+      setLoading(true);
+      const creds = await smtpService.get();
+      if (creds) {
+        setConfig({
+          smtpHost: creds.smtpHost || '',
+          smtpPort: creds.smtpPort || '587',
+          emailUser: creds.emailUser || '',
+          emailPass: creds.emailPass || '',
+          senderName: creds.senderName || 'Support Team',
+        });
+        setConfigured(!!(creds.smtpHost && creds.emailUser && creds.emailPass));
+      }
+    } catch (err) {
+      console.error('Failed to load SMTP config:', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     
     if (!config.smtpHost || !config.emailUser || !config.emailPass) {
@@ -61,15 +76,12 @@ export default function Settings() {
     setError('');
 
     try {
-      const saved = saveCredentials(config);
-      if (saved) {
-        setSuccess('Settings saved to your browser. Your credentials are stored locally and never sent to our servers.');
-        setConfigured(true);
-      } else {
-        setError('Failed to save settings');
-      }
+      await smtpService.save(config);
+      setSuccess('Settings saved! Your SMTP settings are synced across all your devices.');
+      setConfigured(true);
     } catch (err) {
-      setError('Failed to save settings');
+      console.error('Save error:', err);
+      setError('Failed to save settings: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -79,17 +91,21 @@ export default function Settings() {
     setClearConfirm(true);
   }
 
-  function confirmClear() {
-    clearCredentials();
-    setConfig({
-      smtpHost: '',
-      smtpPort: '587',
-      emailUser: '',
-      emailPass: '',
-      senderName: 'Support Team',
-    });
-    setConfigured(false);
-    setSuccess('Credentials cleared');
+  async function confirmClear() {
+    try {
+      await smtpService.delete();
+      setConfig({
+        smtpHost: '',
+        smtpPort: '587',
+        emailUser: '',
+        emailPass: '',
+        senderName: 'Support Team',
+      });
+      setConfigured(false);
+      setSuccess('Credentials cleared');
+    } catch (err) {
+      setError('Failed to clear credentials');
+    }
     setClearConfirm(false);
   }
 
@@ -127,6 +143,14 @@ export default function Settings() {
       {error && <Alert type="error" message={error} />}
       {success && <Alert type="success" message={success} />}
 
+      {loading ? (
+        <Card>
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-500">Loading settings...</span>
+          </div>
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
         <div className="lg:col-span-2">
@@ -252,12 +276,12 @@ export default function Settings() {
               {/* Security Notice */}
               <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                 <div className="flex items-start gap-3">
-                  <Lock className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <Cloud className="w-5 h-5 text-blue-600 mt-0.5" />
                   <div>
-                    <h4 className="font-medium text-blue-900 text-sm">Your Credentials Stay Private</h4>
+                    <h4 className="font-medium text-blue-900 text-sm">Synced Across Devices</h4>
                     <p className="text-xs text-blue-700 mt-1">
-                      Your SMTP credentials are stored only in your browser's local storage. 
-                      They are never saved on our servers. Each user must configure their own email account.
+                      Your SMTP settings are securely stored in the cloud and synced across all your devices. 
+                      Password is stored locally on each device for added security.
                     </p>
                   </div>
                 </div>
@@ -309,13 +333,14 @@ export default function Settings() {
               <div>
                 <h4 className="font-medium text-blue-900 text-sm">Security Note</h4>
                 <p className="text-xs text-blue-700 mt-1">
-                  Your credentials are stored only in your browser's local storage and are never sent to our servers.
+                  Your SMTP host, port, and email are stored in Supabase. Your password is stored locally for each device.
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+      )}
 
       {/* Clear Credentials Confirmation */}
       <ConfirmDialog

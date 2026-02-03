@@ -6,15 +6,12 @@ import {
   BarChart3, Target
 } from 'lucide-react';
 import { Card, Badge, PageLoader, Button } from '../components/UI';
-import { templatesService, contactsService } from '../services/supabase';
-import { isConfigured } from '../services/credentials';
+import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { useCampaign } from '../context/CampaignContext';
-import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const campaign = useCampaign();
-  const { user } = useAuth();
   const [stats, setStats] = useState({
     templates: 0,
     contacts: 0,
@@ -28,9 +25,10 @@ export default function Dashboard() {
     
     async function loadData() {
       try {
-        const [templates, contacts] = await Promise.all([
+        const [templates, contacts, isConfigured] = await Promise.all([
           templatesService.getAll(),
           contactsService.getAll(),
+          smtpService.isConfigured(),
         ]);
         
         if (cancelled) return;
@@ -38,7 +36,7 @@ export default function Dashboard() {
         setStats({
           templates: templates.length,
           contacts: contacts.length,
-          configured: isConfigured(),
+          configured: isConfigured,
         });
         setRecentTemplates(templates.slice(0, 3));
       } catch (error) {

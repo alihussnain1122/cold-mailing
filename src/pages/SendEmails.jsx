@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, PageLoader } from '../components/UI';
-import { templatesService, contactsService } from '../services/supabase';
+import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { sendAPI } from '../services/api';
-import { getCredentials } from '../services/credentials';
 import { useCampaign } from '../context/CampaignContext';
 
 export default function SendEmails() {
@@ -36,20 +35,18 @@ export default function SendEmails() {
     }
     
     try {
-      const [templatesData, contactsData] = await Promise.all([
+      const [templatesData, contactsData, smtpConfig] = await Promise.all([
         templatesService.getAll(),
         contactsService.getAll(),
+        smtpService.get(),
       ]);
-      
-      // Get sender name from credentials
-      const credentials = getCredentials();
       
       setTemplates(templatesData);
       setContacts(contactsData);
       
-      // Set sender name from credentials only on initial load
-      if (credentials?.senderName) {
-        setSenderName(prev => prev || credentials.senderName);
+      // Set sender name from SMTP config only on initial load
+      if (smtpConfig?.senderName) {
+        setSenderName(prev => prev || smtpConfig.senderName);
       }
       
       // Only auto-select all if none are selected (initial load)
