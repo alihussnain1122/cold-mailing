@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
-import { contactsAPI } from '../services/api';
+import { contactsService } from '../services/supabase';
 import { useDebounce } from '../utils';
 
 const ITEMS_PER_PAGE = 50;
@@ -19,7 +19,7 @@ export default function Contacts() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmails, setNewEmails] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, email: null });
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, email: null });
   const fileInputRef = useRef(null);
 
   // Debounced search term
@@ -38,10 +38,10 @@ export default function Contacts() {
 
   const loadContacts = useCallback(async () => {
     try {
-      const data = await contactsAPI.getAll();
+      const data = await contactsService.getAll();
       setContacts(data);
-    } catch {
-      setError('Failed to load contacts');
+    } catch (err) {
+      setError('Failed to load contacts: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -86,9 +86,9 @@ export default function Contacts() {
 
     setSaving(true);
     try {
-      const result = await contactsAPI.add(emails);
-      setContacts(result.contacts);
-      setSuccess(`Added ${result.added} new contacts`);
+      await contactsService.bulkAdd(emails);
+      await loadContacts();
+      setSuccess(`Added ${emails.length} contacts`);
       setIsModalOpen(false);
       setNewEmails('');
     } catch (err) {
@@ -98,17 +98,17 @@ export default function Contacts() {
     }
   }
 
-  async function handleDelete(email) {
-    setDeleting(email);
+  async function handleDelete(id) {
+    setDeleting(id);
     try {
-      const result = await contactsAPI.delete(email);
-      setContacts(result.contacts);
+      await contactsService.delete(id);
+      await loadContacts();
       setSuccess('Contact deleted');
     } catch (err) {
       setError(err.message);
     } finally {
       setDeleting(null);
-      setDeleteConfirm({ open: false, email: null });
+      setDeleteConfirm({ open: false, id: null, email: null });
     }
   }
 
@@ -121,9 +121,21 @@ export default function Contacts() {
     setUploading(true);
 
     try {
-      const result = await contactsAPI.upload(file);
-      setContacts(result.contacts);
-      setSuccess(`Uploaded ${result.count} contacts`);
+      const text = await file.text();
+      const lines = text.split(/[\n\r]+/).filter(line => line.trim());
+      // Skip header if it looks like one
+      const startIndex = lines[0]?.toLowerCase().includes('email') ? 1 : 0;
+      const emails = lines.slice(startIndex)
+        .map(line => line.split(',')[0].trim().replace(/"/g, ''))
+        .filter(email => email && email.includes('@'));
+      
+      if (emails.length === 0) {
+        throw new Error('No valid emails found in CSV');
+      }
+
+      await contactsService.bulkAdd(emails);
+      await loadContacts();
+      setSuccess(`Uploaded ${emails.length} contacts`);
     } catch (err) {
       setError(err.message || 'Failed to upload contacts');
     } finally {
@@ -217,13 +229,13 @@ export default function Contacts() {
                   {paginatedContacts.map((contact, index) => {
                     const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
                     return (
-                      <tr key={contact.email} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={contact.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-sm text-gray-400">{globalIndex}</td>
                         <td className="py-3 px-4 text-sm text-gray-900">{contact.email}</td>
                         <td className="py-3 px-4 text-right">
                           <button
-                            onClick={() => setDeleteConfirm({ open: true, email: contact.email })}
-                            disabled={deleting === contact.email}
+                            onClick={() => setDeleteConfirm({ open: true, id: contact.id, email: contact.email })}
+                            disabled={deleting === contact.id}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                             aria-label={`Delete contact: ${contact.email}`}
                           >
@@ -310,8 +322,8 @@ export default function Contacts() {
       {/* Delete Confirmation */}
       <ConfirmDialog
         isOpen={deleteConfirm.open}
-        onClose={() => setDeleteConfirm({ open: false, email: null })}
-        onConfirm={() => handleDelete(deleteConfirm.email)}
+        onClose={() => setDeleteConfirm({ open: false, id: null, email: null })}
+        onConfirm={() => handleDelete(deleteConfirm.id)}
         title="Delete Contact"
         message={`Are you sure you want to delete "${deleteConfirm.email}"? This action cannot be undone.`}
         confirmText="Delete"

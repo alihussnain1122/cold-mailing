@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Plus, Trash2, Edit, Upload, Eye } from 'lucide-react';
 import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
-import { templatesAPI } from '../services/api';
+import { templatesService } from '../services/supabase';
 import { sanitizeAndFormat } from '../utils';
 
 export default function Templates() {
@@ -14,11 +14,11 @@ export default function Templates() {
   const [success, setSuccess] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editIndex, setEditIndex] = useState(null);
-  const [formData, setFormData] = useState({ subject: '', body: '' });
+  const [editId, setEditId] = useState(null);
+  const [formData, setFormData] = useState({ name: '', subject: '', body: '' });
   
   const [previewTemplate, setPreviewTemplate] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null });
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null });
   const fileInputRef = useRef(null);
 
   // Auto-dismiss messages
@@ -34,10 +34,10 @@ export default function Templates() {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await templatesAPI.getAll();
+      const data = await templatesService.getAll();
       setTemplates(data);
-    } catch {
-      setError('Failed to load templates');
+    } catch (err) {
+      setError('Failed to load templates: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -48,14 +48,18 @@ export default function Templates() {
   }, [loadTemplates]);
 
   function openAddModal() {
-    setEditIndex(null);
-    setFormData({ subject: '', body: '' });
+    setEditId(null);
+    setFormData({ name: '', subject: '', body: '' });
     setIsModalOpen(true);
   }
 
-  function openEditModal(index) {
-    setEditIndex(index);
-    setFormData({ ...templates[index] });
+  function openEditModal(template) {
+    setEditId(template.id);
+    setFormData({ 
+      name: template.name || '', 
+      subject: template.subject, 
+      body: template.body 
+    });
     setIsModalOpen(true);
   }
 
@@ -67,17 +71,14 @@ export default function Templates() {
 
     setSaving(true);
     try {
-      if (editIndex !== null) {
-        const updatedTemplates = [...templates];
-        updatedTemplates[editIndex] = formData;
-        await templatesAPI.saveAll(updatedTemplates);
-        setTemplates(updatedTemplates);
+      if (editId) {
+        await templatesService.update(editId, formData);
         setSuccess('Template updated successfully');
       } else {
-        const result = await templatesAPI.add(formData);
-        setTemplates(result.templates);
+        await templatesService.add(formData);
         setSuccess('Template added successfully');
       }
+      await loadTemplates();
       setIsModalOpen(false);
     } catch (err) {
       setError(err.message);
@@ -86,17 +87,17 @@ export default function Templates() {
     }
   }
 
-  async function handleDelete(index) {
-    setDeleting(index);
+  async function handleDelete(id) {
+    setDeleting(id);
     try {
-      const result = await templatesAPI.delete(index);
-      setTemplates(result.templates);
+      await templatesService.delete(id);
+      await loadTemplates();
       setSuccess('Template deleted successfully');
     } catch (err) {
       setError(err.message);
     } finally {
       setDeleting(null);
-      setDeleteConfirm({ open: false, index: null });
+      setDeleteConfirm({ open: false, id: null });
     }
   }
 
@@ -109,9 +110,13 @@ export default function Templates() {
     setUploading(true);
 
     try {
-      const result = await templatesAPI.upload(file);
-      setTemplates(result.templates);
-      setSuccess(`Uploaded ${result.count} templates`);
+      const text = await file.text();
+      const imported = JSON.parse(text);
+      const templatesArray = Array.isArray(imported) ? imported : [imported];
+      
+      await templatesService.bulkAdd(templatesArray);
+      await loadTemplates();
+      setSuccess(`Uploaded ${templatesArray.length} templates`);
     } catch (err) {
       setError(err.message || 'Failed to upload templates');
     } finally {
@@ -172,12 +177,12 @@ export default function Templates() {
         </Card>
       ) : (
         <div className="grid gap-4" role="list" aria-label="Email templates">
-          {templates.map((template, index) => (
-            <Card key={index} className="hover:shadow-md transition-shadow" role="listitem">
+          {templates.map((template) => (
+            <Card key={template.id} className="hover:shadow-md transition-shadow" role="listitem">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-gray-400">#{index + 1}</span>
+                    <span className="text-xs font-medium text-gray-400">{template.name || 'Untitled'}</span>
                     <h3 className="text-lg font-semibold text-gray-900 truncate">
                       {template.subject}
                     </h3>
@@ -195,15 +200,15 @@ export default function Templates() {
                     <Eye className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <button
-                    onClick={() => openEditModal(index)}
+                    onClick={() => openEditModal(template)}
                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     aria-label={`Edit template: ${template.subject}`}
                   >
                     <Edit className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <button
-                    onClick={() => setDeleteConfirm({ open: true, index })}
-                    disabled={deleting === index}
+                    onClick={() => setDeleteConfirm({ open: true, id: template.id })}
+                    disabled={deleting === template.id}
                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                     aria-label={`Delete template: ${template.subject}`}
                   >
@@ -220,10 +225,17 @@ export default function Templates() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editIndex !== null ? 'Edit Template' : 'Add Template'}
+        title={editId ? 'Edit Template' : 'Add Template'}
         size="lg"
       >
         <div className="space-y-4">
+          <Input
+            label="Template Name"
+            placeholder="e.g., Welcome Email"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            maxLength={100}
+          />
           <Input
             label="Subject"
             placeholder="Enter email subject"
@@ -243,7 +255,7 @@ export default function Templates() {
               Cancel
             </Button>
             <Button onClick={handleSave} loading={saving}>
-              {editIndex !== null ? 'Update' : 'Add'} Template
+              {editId ? 'Update' : 'Add'} Template
             </Button>
           </div>
         </div>
@@ -278,8 +290,8 @@ export default function Templates() {
       {/* Delete Confirmation */}
       <ConfirmDialog
         isOpen={deleteConfirm.open}
-        onClose={() => setDeleteConfirm({ open: false, index: null })}
-        onConfirm={() => handleDelete(deleteConfirm.index)}
+        onClose={() => setDeleteConfirm({ open: false, id: null })}
+        onConfirm={() => handleDelete(deleteConfirm.id)}
         title="Delete Template"
         message="Are you sure you want to delete this template? This action cannot be undone."
         confirmText="Delete"

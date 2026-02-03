@@ -1,8 +1,18 @@
-import { Mail, Activity, Zap, Bell } from 'lucide-react';
+import { Mail, Activity, Zap, Bell, LogOut } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
+import { useAuth } from '../../context/AuthContext';
+import { useState } from 'react';
 
 export default function Header() {
   const campaign = useCampaign();
+  const { user, signOut } = useAuth();
+  const [showMenu, setShowMenu] = useState(false);
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  const userInitial = user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U';
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -71,10 +81,33 @@ export default function Header() {
             </button>
             
             {/* User Avatar */}
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-blue-500/20">
-                U
-              </div>
+            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 relative">
+              <button 
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center gap-2 hover:bg-gray-50 rounded-lg p-1 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-blue-500/20">
+                  {userInitial.toUpperCase()}
+                </div>
+              </button>
+              
+              {showMenu && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {user?.user_metadata?.full_name || 'User'}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

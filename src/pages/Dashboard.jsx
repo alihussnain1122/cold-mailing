@@ -2,16 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Mail, Users, FileText, Send, Clock, CheckCircle, XCircle, Activity,
-  PlayCircle, Settings, AlertTriangle,
+  PlayCircle, Settings, AlertTriangle, ArrowRight,
   BarChart3, Target
 } from 'lucide-react';
 import { Card, Badge, PageLoader, Button } from '../components/UI';
-import { templatesAPI, contactsAPI, configAPI } from '../services/api';
+import { templatesService, contactsService } from '../services/supabase';
+import { isConfigured } from '../services/credentials';
 import { useCampaign } from '../context/CampaignContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const campaign = useCampaign();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     templates: 0,
     contacts: 0,
@@ -25,10 +28,9 @@ export default function Dashboard() {
     
     async function loadData() {
       try {
-        const [templates, contacts, config] = await Promise.all([
-          templatesAPI.getAll(),
-          contactsAPI.getAll(),
-          configAPI.get(),
+        const [templates, contacts] = await Promise.all([
+          templatesService.getAll(),
+          contactsService.getAll(),
         ]);
         
         if (cancelled) return;
@@ -36,7 +38,7 @@ export default function Dashboard() {
         setStats({
           templates: templates.length,
           contacts: contacts.length,
-          configured: config.configured,
+          configured: isConfigured(),
         });
         setRecentTemplates(templates.slice(0, 3));
       } catch (error) {
