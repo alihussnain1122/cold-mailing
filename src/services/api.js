@@ -144,6 +144,34 @@ export const contactsAPI = {
 
 // Email Sending API - Now includes credentials from Supabase
 export const sendAPI = {
+  // Send test email with template content directly (for Vercel compatibility)
+  testWithTemplate: async (email, template, senderName) => {
+    const creds = await smtpService.get();
+    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+      throw new Error('SMTP not configured. Please set up your credentials in Settings.');
+    }
+    const credentials = {
+      smtpHost: creds.smtpHost,
+      smtpPort: creds.smtpPort,
+      emailUser: creds.emailUser,
+      emailPass: creds.emailPass,
+      senderName: creds.senderName,
+    };
+    // Use sendSingle endpoint with template content
+    return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        email, 
+        template: {
+          subject: template.subject,
+          body: template.body,
+        },
+        senderName: senderName || credentials.senderName,
+        credentials,
+      }),
+    });
+  },
+  // Legacy test method (deprecated - uses templateIndex)
   test: async (email, templateIndex) => {
     const creds = await smtpService.get();
     if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
@@ -161,7 +189,7 @@ export const sendAPI = {
       body: JSON.stringify({ 
         email, 
         templateIndex,
-        credentials, // Include SMTP credentials
+        credentials,
       }),
     });
   },

@@ -147,10 +147,16 @@ export default function SendEmails() {
       return;
     }
 
+    const template = templates[testTemplateIndex];
+    if (!template) {
+      setError('Please select a template');
+      return;
+    }
+
     setTestSending(true);
     setError('');
     try {
-      await sendAPI.test(testEmail, testTemplateIndex);
+      await sendAPI.testWithTemplate(testEmail, template, senderName);
       setSuccess(`Test email sent to ${testEmail}`);
     } catch (err) {
       setError(err.message);
