@@ -56,12 +56,11 @@ export const CampaignProvider = ({ children }) => {
   }, [user]);
 
   // Subscribe to real-time updates when we have a campaign
+  // Even the executing device needs to listen for pause commands from other devices
   useEffect(() => {
-    const { campaignId, isExecuting } = campaignState;
+    const { campaignId } = campaignState;
     
-    // Only subscribe if we have a campaign and we're NOT the one executing
-    // (if we're executing, we update state ourselves)
-    if (!campaignId || isExecuting) {
+    if (!campaignId) {
       return;
     }
 
@@ -72,17 +71,26 @@ export const CampaignProvider = ({ children }) => {
       const campaign = payload.new;
       
       if (campaign) {
-        setCampaignState(prev => ({
-          ...prev,
-          status: campaign.status,
-          sent: campaign.sent_count,
-          failed: campaign.failed_count,
-          progress: campaign.current_index,
-          currentEmail: campaign.current_email || '',
-          currentTemplate: campaign.current_template || '',
-          isRunning: campaign.status === 'running',
-          error: campaign.error_message,
-        }));
+        // If we're executing and someone else paused it, stop!
+        if (executingRef.current && campaign.status === 'paused') {
+          log('Received pause command from another device');
+          stopRef.current = true;
+        }
+        
+        // Only update state if we're NOT executing (avoid overwriting our own updates)
+        if (!executingRef.current) {
+          setCampaignState(prev => ({
+            ...prev,
+            status: campaign.status,
+            sent: campaign.sent_count,
+            failed: campaign.failed_count,
+            progress: campaign.current_index,
+            currentEmail: campaign.current_email || '',
+            currentTemplate: campaign.current_template || '',
+            isRunning: campaign.status === 'running',
+            error: campaign.error_message,
+          }));
+        }
       }
     });
 
@@ -92,7 +100,7 @@ export const CampaignProvider = ({ children }) => {
         subscriptionRef.current = null;
       }
     };
-  }, [campaignState.campaignId, campaignState.isExecuting]);
+  }, [campaignState.campaignId]);
 
   async function loadActiveCampaign() {
     try {
