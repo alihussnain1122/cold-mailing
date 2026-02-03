@@ -20,6 +20,8 @@ export default function Contacts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmails, setNewEmails] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, email: null });
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef(null);
 
   // Debounced search term
@@ -112,6 +114,20 @@ export default function Contacts() {
     }
   }
 
+  async function handleDeleteAll() {
+    setDeletingAll(true);
+    try {
+      await contactsService.deleteAll();
+      setContacts([]);
+      setSuccess('All contacts deleted successfully');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingAll(false);
+      setDeleteAllConfirm(false);
+    }
+  }
+
   async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -169,6 +185,12 @@ export default function Contacts() {
             className="hidden"
             aria-label="Import contacts CSV file"
           />
+          {contacts.length > 0 && (
+            <Button variant="danger" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
+              <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+              Delete All
+            </Button>
+          )}
           <Button variant="outline" onClick={handleImportClick} loading={uploading}>
             <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
             {uploading ? 'Uploading...' : 'Import CSV'}
@@ -327,6 +349,17 @@ export default function Contacts() {
         title="Delete Contact"
         message={`Are you sure you want to delete "${deleteConfirm.email}"? This action cannot be undone.`}
         confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Delete All Confirmation */}
+      <ConfirmDialog
+        isOpen={deleteAllConfirm}
+        onClose={() => setDeleteAllConfirm(false)}
+        onConfirm={handleDeleteAll}
+        title="Delete All Contacts"
+        message={`Are you sure you want to delete all ${contacts.length} contacts? This action cannot be undone.`}
+        confirmText="Delete All"
         variant="danger"
       />
     </div>

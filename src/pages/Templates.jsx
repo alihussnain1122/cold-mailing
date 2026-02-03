@@ -19,6 +19,8 @@ export default function Templates() {
   
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null });
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef(null);
 
   // Auto-dismiss messages
@@ -101,6 +103,20 @@ export default function Templates() {
     }
   }
 
+  async function handleDeleteAll() {
+    setDeletingAll(true);
+    try {
+      await templatesService.deleteAll();
+      setTemplates([]);
+      setSuccess('All templates deleted successfully');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingAll(false);
+      setDeleteAllConfirm(false);
+    }
+  }
+
   async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -150,6 +166,12 @@ export default function Templates() {
             className="hidden"
             aria-label="Import templates JSON file"
           />
+          {templates.length > 0 && (
+            <Button variant="danger" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
+              <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+              Delete All
+            </Button>
+          )}
           <Button variant="outline" onClick={handleImportClick} loading={uploading}>
             <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
             {uploading ? 'Uploading...' : 'Import JSON'}
@@ -295,6 +317,17 @@ export default function Templates() {
         title="Delete Template"
         message="Are you sure you want to delete this template? This action cannot be undone."
         confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Delete All Confirmation */}
+      <ConfirmDialog
+        isOpen={deleteAllConfirm}
+        onClose={() => setDeleteAllConfirm(false)}
+        onConfirm={handleDeleteAll}
+        title="Delete All Templates"
+        message={`Are you sure you want to delete all ${templates.length} templates? This action cannot be undone.`}
+        confirmText="Delete All"
         variant="danger"
       />
     </div>
