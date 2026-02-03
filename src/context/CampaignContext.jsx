@@ -140,6 +140,21 @@ export const CampaignProvider = ({ children }) => {
 
     setCampaignState(prev => ({ ...prev, isExecuting: true }));
 
+    // Helper function to check if campaign was paused remotely
+    const checkIfPaused = async () => {
+      try {
+        const campaign = await campaignService.getById(campaignId);
+        if (campaign && campaign.status === 'paused') {
+          log('Campaign was paused remotely');
+          stopRef.current = true;
+          return true;
+        }
+      } catch (err) {
+        log('Error checking campaign status:', err);
+      }
+      return false;
+    };
+
     try {
       // Get pending emails
       let pendingEmails = await campaignService.getPendingEmails(campaignId);
@@ -156,9 +171,23 @@ export const CampaignProvider = ({ children }) => {
       log(`Executing campaign with ${pendingEmails.length} pending emails`);
 
       for (let i = 0; i < pendingEmails.length; i++) {
+        // Check stop flag
         if (stopRef.current) {
           log('Campaign stopped by user');
           await campaignService.updateStatus(campaignId, 'paused');
+          setCampaignState(prev => ({
+            ...prev,
+            isRunning: false,
+            status: 'paused',
+            isExecuting: false,
+          }));
+          executingRef.current = false;
+          return;
+        }
+
+        // Check database for remote pause (every email)
+        if (await checkIfPaused()) {
+          log('Campaign paused remotely - stopping');
           setCampaignState(prev => ({
             ...prev,
             isRunning: false,
@@ -222,6 +251,13 @@ export const CampaignProvider = ({ children }) => {
             
             for (let countdown = delaySeconds; countdown > 0; countdown--) {
               if (stopRef.current) break;
+              
+              // Check for remote pause every 5 seconds during countdown
+              if (countdown % 5 === 0) {
+                const paused = await checkIfPaused();
+                if (paused) break;
+              }
+              
               setCampaignState(prev => ({ ...prev, nextEmailIn: countdown }));
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
