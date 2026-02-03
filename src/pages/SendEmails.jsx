@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
-import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw } from 'lucide-react';
-import { Card, Button, Input, Alert, Badge } from '../components/UI';
-import { templatesAPI, contactsAPI, sendAPI } from '../services/api';
+import { useEffect, useState, useCallback } from 'react';
+import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle } from 'lucide-react';
+import { Card, Button, Input, Alert, Badge, PageLoader } from '../components/UI';
+import { templatesAPI, contactsAPI, sendAPI, configAPI } from '../services/api';
 import { useCampaign } from '../context/CampaignContext';
 
 export default function SendEmails() {
   const [templates, setTemplates] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [testSending, setTestSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
-  const [senderName, setSenderName] = useState('Ali');
+  const [senderName, setSenderName] = useState('');
   const [delayMin, setDelayMin] = useState(10);
   const [delayMax, setDelayMax] = useState(90);
   
@@ -23,44 +25,62 @@ export default function SendEmails() {
   // Use campaign context
   const campaign = useCampaign();
 
-  useEffect(() => {
-    loadData();
+  // Initial data load - runs once on mount
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     
-    // Reload data when component becomes visible or window gains focus
-    const handleFocus = () => {
-      loadData();
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
     try {
-      const [templatesData, contactsData] = await Promise.all([
+      const [templatesData, contactsData, configData] = await Promise.all([
         templatesAPI.getAll(),
         contactsAPI.getAll(),
+        configAPI.get(),
       ]);
+      
       setTemplates(templatesData);
       setContacts(contactsData);
       
-      // Only auto-select all if none are selected
-      if (selectedTemplates.length === 0) {
-        setSelectedTemplates(templatesData.map((_, i) => i));
+      // Set sender name from config only on initial load
+      if (configData.senderName) {
+        setSenderName(prev => prev || configData.senderName);
       }
-      if (selectedContacts.length === 0) {
-        setSelectedContacts(contactsData);
-      }
-    } catch (err) {
+      
+      // Only auto-select all if none are selected (initial load)
+      setSelectedTemplates(prev => 
+        prev.length === 0 && templatesData.length > 0 
+          ? templatesData.map((_, i) => i) 
+          : prev
+      );
+      setSelectedContacts(prev => 
+        prev.length === 0 && contactsData.length > 0 
+          ? contactsData 
+          : prev
+      );
+    } catch {
       setError('Failed to load data');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, []); // No dependencies - uses functional updates
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Auto-dismiss messages
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   async function handleStart() {
     if (selectedContacts.length === 0) {
@@ -70,6 +90,14 @@ export default function SendEmails() {
     if (selectedTemplates.length === 0) {
       setError('Please select at least one template');
       return;
+    }
+    
+    // Validate delay values
+    const minDelay = Math.max(1, delayMin);
+    const maxDelay = Math.max(minDelay, delayMax);
+    if (delayMin !== minDelay || delayMax !== maxDelay) {
+      setDelayMin(minDelay);
+      setDelayMax(maxDelay);
     }
 
     setError('');
@@ -89,10 +117,14 @@ export default function SendEmails() {
       };
     });
 
-    // Start campaign using context
+    // Start campaign using context with validated delays
     campaign.startCampaign(
       campaignContacts,
-      { delayMin: delayMin * 1000, delayMax: delayMax * 1000 } // Convert to milliseconds
+      { 
+        delayMin: minDelay * 1000, 
+        delayMax: maxDelay * 1000,
+        senderName: senderName || 'Support Team'
+      }
     );
 
     setSuccess('Campaign started! You can navigate to other pages while it runs.');
@@ -114,12 +146,15 @@ export default function SendEmails() {
       return;
     }
 
+    setTestSending(true);
     setError('');
     try {
       await sendAPI.test(testEmail, testTemplateIndex);
       setSuccess(`Test email sent to ${testEmail}`);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setTestSending(false);
     }
   }
 
@@ -132,11 +167,7 @@ export default function SendEmails() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   const progressPercent = campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0;
@@ -150,10 +181,11 @@ export default function SendEmails() {
         </div>
         <Button 
           variant="outline" 
-          onClick={loadData}
-          disabled={loading}
+          onClick={() => loadData(true)}
+          loading={refreshing}
+          aria-label="Refresh data"
         >
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
           Refresh
         </Button>
       </div>
@@ -177,14 +209,14 @@ export default function SendEmails() {
                 label="Min Delay (seconds)"
                 type="number"
                 value={delayMin}
-                onChange={(e) => setDelayMin(e.target.value)}
+                onChange={(e) => setDelayMin(Number(e.target.value))}
                 min="1"
               />
               <Input
                 label="Max Delay (seconds)"
                 type="number"
                 value={delayMax}
-                onChange={(e) => setDelayMax(e.target.value)}
+                onChange={(e) => setDelayMax(Number(e.target.value))}
                 min="1"
               />
             </div>
@@ -193,18 +225,28 @@ export default function SendEmails() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Templates ({selectedTemplates.length} selected)
               </label>
-              <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                {templates.map((template, index) => (
-                  <label key={index} className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedTemplates.includes(index)}
-                      onChange={() => toggleTemplate(index)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700 truncate">{template.subject}</span>
-                  </label>
-                ))}
+              <div 
+                className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3"
+                role="group"
+                aria-label="Select templates"
+              >
+                {templates.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No templates available. Create templates first.
+                  </p>
+                ) : (
+                  templates.map((template, index) => (
+                    <label key={index} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTemplates.includes(index)}
+                        onChange={() => toggleTemplate(index)}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 truncate">{template.subject}</span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
 
@@ -229,11 +271,24 @@ export default function SendEmails() {
               {campaign.isRunning ? (
                 <>
                   <Button variant="danger" onClick={handleStop} className="flex-1">
-                    <Square className="w-4 h-4 mr-2" />
+                    <Square className="w-4 h-4 mr-2" aria-hidden="true" />
                     Stop Campaign
                   </Button>
                   <Button variant="outline" onClick={handleReset}>
                     Reset
+                  </Button>
+                </>
+              ) : campaign.canResume ? (
+                <>
+                  <Button 
+                    onClick={() => campaign.resumeCampaign()} 
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <PlayCircle className="w-4 h-4 mr-2" aria-hidden="true" />
+                    Resume Campaign ({campaign.sent}/{campaign.total})
+                  </Button>
+                  <Button variant="outline" onClick={handleReset}>
+                    Discard
                   </Button>
                 </>
               ) : (
@@ -241,9 +296,9 @@ export default function SendEmails() {
                   <Button 
                     onClick={handleStart} 
                     className="flex-1" 
-                    disabled={selectedTemplates.length === 0 || selectedContacts.length === 0 || loading}
+                    disabled={selectedTemplates.length === 0 || selectedContacts.length === 0}
                   >
-                    <Play className="w-4 h-4 mr-2" />
+                    <Play className="w-4 h-4 mr-2" aria-hidden="true" />
                     Start Campaign
                   </Button>
                   {campaign.status !== 'idle' && (
@@ -269,24 +324,36 @@ export default function SendEmails() {
             />
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label htmlFor="test-template" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Template
               </label>
               <select
+                id="test-template"
                 value={testTemplateIndex}
                 onChange={(e) => setTestTemplateIndex(Number(e.target.value))}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={templates.length === 0}
               >
-                {templates.map((template, index) => (
-                  <option key={index} value={index}>
-                    {template.subject}
-                  </option>
-                ))}
+                {templates.length === 0 ? (
+                  <option>No templates available</option>
+                ) : (
+                  templates.map((template, index) => (
+                    <option key={index} value={index}>
+                      {template.subject}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
-            <Button variant="secondary" onClick={handleTestEmail} className="w-full">
-              <Send className="w-4 h-4 mr-2" />
+            <Button 
+              variant="secondary" 
+              onClick={handleTestEmail} 
+              className="w-full"
+              loading={testSending}
+              disabled={templates.length === 0}
+            >
+              <Send className="w-4 h-4 mr-2" aria-hidden="true" />
               Send Test Email
             </Button>
           </div>
@@ -300,7 +367,7 @@ export default function SendEmails() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {campaign.isRunning && (
-                  <div className="animate-pulse">
+                  <div className="animate-pulse" aria-hidden="true">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   </div>
                 )}
@@ -318,7 +385,14 @@ export default function SendEmails() {
               </span>
             </div>
 
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div 
+              className="w-full bg-gray-200 rounded-full h-3"
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Campaign progress"
+            >
               <div
                 className="bg-blue-600 h-3 rounded-full transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
@@ -327,7 +401,7 @@ export default function SendEmails() {
 
             {campaign.currentEmail && (
               <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                <Mail className="w-4 h-4" />
+                <Mail className="w-4 h-4" aria-hidden="true" />
                 <div className="flex-1">
                   <div>Sending to: <strong>{campaign.currentEmail}</strong></div>
                   {campaign.currentTemplate && (
@@ -339,7 +413,7 @@ export default function SendEmails() {
 
             {campaign.nextEmailIn > 0 && (
               <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded-lg p-3">
-                <Clock className="w-4 h-4 animate-pulse" />
+                <Clock className="w-4 h-4 animate-pulse" aria-hidden="true" />
                 <span className="font-medium">Next email in {campaign.nextEmailIn} seconds</span>
               </div>
             )}
@@ -347,6 +421,7 @@ export default function SendEmails() {
             {campaign.failed > 0 && (
               <div className="bg-red-50 rounded-lg p-3">
                 <p className="text-sm font-medium text-red-700">
+                  <XCircle className="w-4 h-4 inline mr-2" aria-hidden="true" />
                   Failed: {campaign.failed}
                 </p>
               </div>

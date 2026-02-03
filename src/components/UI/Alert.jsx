@@ -28,7 +28,7 @@ export default function Alert({ type = 'info', message, className = '' }) {
   
   return (
     <div className={`flex items-start gap-3 p-4 rounded-lg border ${bg} ${className}`}>
-      <Icon className={`w-5 h-5 ${text} flex-shrink-0 mt-0.5`} />
+      <Icon className={`w-5 h-5 ${text} shrink-0 mt-0.5`} />
       <p className={`text-sm ${text}`}>{message}</p>
     </div>
   );

@@ -1,6 +1,7 @@
 export default function Input({ 
   label, 
-  error, 
+  error,
+  hint,
   className = '', 
   ...props 
 }) {
@@ -12,11 +13,12 @@ export default function Input({
         </label>
       )}
       <input
-        className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow ${
-          error ? 'border-red-500' : 'border-gray-300'
+        className={`w-full px-4 py-3 border rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+          error ? 'border-red-500 ring-red-100' : 'border-gray-300 hover:border-gray-400'
         }`}
         {...props}
       />
+      {hint && !error && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
       {error && <p className="mt-1.5 text-sm text-red-600">{error}</p>}
     </div>
   );

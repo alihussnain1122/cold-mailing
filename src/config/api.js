@@ -23,10 +23,10 @@ export const API_ENDPOINTS = {
   UPLOAD_CONTACTS: `${API_BASE_URL}/api/upload/contacts`,
   UPLOAD_TEMPLATES: `${API_BASE_URL}/api/upload/templates`,
   
-  // Sending
-  SEND_STATUS: `${API_BASE_URL}/api/send/status`,
-  SEND_START: `${API_BASE_URL}/api/send/start`,
-  SEND_STOP: `${API_BASE_URL}/api/send/stop`,
+  // Sending - Only endpoints that exist on backend
   SEND_TEST: `${API_BASE_URL}/api/send/test`,
   SEND_SINGLE: `${API_BASE_URL}/api/send/single`,
+  
+  // Health check
+  HEALTH: `${API_BASE_URL}/api/health`,
 };

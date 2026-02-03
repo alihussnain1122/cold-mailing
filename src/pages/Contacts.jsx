@@ -1,43 +1,77 @@
-import { useEffect, useState, useRef } from 'react';
-import { Plus, Trash2, Upload, Search, Users } from 'lucide-react';
-import { Card, Button, Input, Modal, Alert } from '../components/UI';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
 import { contactsAPI } from '../services/api';
+import { useDebounce } from '../utils';
+
+const ITEMS_PER_PAGE = 50;
 
 export default function Contacts() {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmails, setNewEmails] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, email: null });
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
+  // Debounced search term
+  const debouncedSearch = useDebounce(searchTerm, 300);
 
+  // Auto-dismiss messages
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => {
         setError('');
         setSuccess('');
-      }, 3000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [error, success]);
 
-  async function loadContacts() {
+  const loadContacts = useCallback(async () => {
     try {
       const data = await contactsAPI.getAll();
       setContacts(data);
-    } catch (err) {
+    } catch {
       setError('Failed to load contacts');
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+
+  // Filtered and paginated contacts
+  const { filteredContacts, paginatedContacts, totalPages } = useMemo(() => {
+    const filtered = contacts.filter(c =>
+      c.email.toLowerCase().includes(debouncedSearch.toLowerCase())
+    );
+    
+    const total = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const paginated = filtered.slice(start, start + ITEMS_PER_PAGE);
+    
+    return {
+      filteredContacts: filtered,
+      paginatedContacts: paginated,
+      totalPages: total,
+    };
+  }, [contacts, debouncedSearch, currentPage]);
 
   async function handleAddEmails() {
     const emails = newEmails
@@ -50,6 +84,7 @@ export default function Contacts() {
       return;
     }
 
+    setSaving(true);
     try {
       const result = await contactsAPI.add(emails);
       setContacts(result.contacts);
@@ -58,16 +93,22 @@ export default function Contacts() {
       setNewEmails('');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
   async function handleDelete(email) {
+    setDeleting(email);
     try {
       const result = await contactsAPI.delete(email);
       setContacts(result.contacts);
       setSuccess('Contact deleted');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDeleting(null);
+      setDeleteConfirm({ open: false, email: null });
     }
   }
 
@@ -77,6 +118,7 @@ export default function Contacts() {
 
     setError('');
     setSuccess('');
+    setUploading(true);
 
     try {
       const result = await contactsAPI.upload(file);
@@ -84,6 +126,8 @@ export default function Contacts() {
       setSuccess(`Uploaded ${result.count} contacts`);
     } catch (err) {
       setError(err.message || 'Failed to upload contacts');
+    } finally {
+      setUploading(false);
     }
     
     e.target.value = '';
@@ -93,16 +137,8 @@ export default function Contacts() {
     fileInputRef.current?.click();
   }
 
-  const filteredContacts = contacts.filter(c =>
-    c.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+  if (loading && contacts.length === 0) {
+    return <PageLoader />;
   }
 
   return (
@@ -118,14 +154,15 @@ export default function Contacts() {
             ref={fileInputRef}
             accept=".csv" 
             onChange={handleFileUpload} 
-            className="hidden" 
+            className="hidden"
+            aria-label="Import contacts CSV file"
           />
-          <Button variant="outline" onClick={handleImportClick}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import CSV
+          <Button variant="outline" onClick={handleImportClick} loading={uploading}>
+            <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
+            {uploading ? 'Uploading...' : 'Import CSV'}
           </Button>
           <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
             Add Contacts
           </Button>
         </div>
@@ -137,20 +174,21 @@ export default function Contacts() {
       <Card>
         {/* Search */}
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             placeholder="Search contacts..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            aria-label="Search contacts by email"
           />
         </div>
 
-        {filteredContacts.length === 0 ? (
+        {paginatedContacts.length === 0 ? (
           <div className="text-center py-12">
             <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users className="w-8 h-8 text-gray-400" />
+              <Users className="w-8 h-8 text-gray-400" aria-hidden="true" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {contacts.length === 0 ? 'No contacts yet' : 'No matching contacts'}
@@ -165,34 +203,72 @@ export default function Contacts() {
             )}
           </div>
         ) : (
-          <div className="overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">#</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Email Address</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContacts.map((contact, index) => (
-                  <tr key={contact.email} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 text-sm text-gray-400">{index + 1}</td>
-                    <td className="py-3 px-4 text-sm text-gray-900">{contact.email}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleDelete(contact.email)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
+          <>
+            <div className="overflow-hidden">
+              <table className="w-full" role="table">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">#</th>
+                    <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">Email Address</th>
+                    <th scope="col" className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {paginatedContacts.map((contact, index) => {
+                    const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+                    return (
+                      <tr key={contact.email} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm text-gray-400">{globalIndex}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900">{contact.email}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => setDeleteConfirm({ open: true, email: contact.email })}
+                            disabled={deleting === contact.email}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            aria-label={`Delete contact: ${contact.email}`}
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredContacts.length)} of {filteredContacts.length} contacts
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+                  </Button>
+                  <span className="text-sm text-gray-600 px-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -205,10 +281,11 @@ export default function Contacts() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="emails-input" className="block text-sm font-medium text-gray-700 mb-1.5">
               Email Addresses
             </label>
             <textarea
+              id="emails-input"
               rows={8}
               placeholder="Enter email addresses (one per line, or separated by commas)"
               value={newEmails}
@@ -223,12 +300,23 @@ export default function Contacts() {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddEmails}>
+            <Button onClick={handleAddEmails} loading={saving}>
               Add Contacts
             </Button>
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, email: null })}
+        onConfirm={() => handleDelete(deleteConfirm.email)}
+        title="Delete Contact"
+        message={`Are you sure you want to delete "${deleteConfirm.email}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

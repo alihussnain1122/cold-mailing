@@ -1,6 +1,69 @@
 import { X } from 'lucide-react';
+import { useEffect, useRef, useCallback } from 'react';
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+  const modalRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  // Keep onClose ref updated without triggering re-renders
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Focus trap handler
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      onCloseRef.current();
+      return;
+    }
+    
+    // Focus trap - only trap Tab key
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    
+    const focusableElements = modalRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    
+    if (e.shiftKey && document.activeElement === firstElement) {
+      e.preventDefault();
+      lastElement?.focus();
+    } else if (!e.shiftKey && document.activeElement === lastElement) {
+      e.preventDefault();
+      firstElement?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Store current focus
+      previousFocusRef.current = document.activeElement;
+      
+      // Prevent body scroll
+      document.body.style.overflow = 'hidden';
+      
+      // Add keyboard listener
+      document.addEventListener('keydown', handleKeyDown);
+      
+      // Focus first focusable element in modal
+      setTimeout(() => {
+        const firstFocusable = modalRef.current?.querySelector(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        firstFocusable?.focus();
+      }, 0);
+      
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+        // Restore focus
+        previousFocusRef.current?.focus();
+      };
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
   
   const sizes = {
@@ -11,24 +74,34 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
   };
   
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
       <div className="flex min-h-full items-center justify-center p-4">
         {/* Backdrop */}
         <div 
           className="fixed inset-0 bg-black/50 transition-opacity" 
           onClick={onClose}
+          aria-hidden="true"
         />
         
         {/* Modal */}
-        <div className={`relative bg-white rounded-xl shadow-xl w-full ${sizes[size]} transform transition-all`}>
+        <div 
+          ref={modalRef}
+          className={`relative bg-white rounded-xl shadow-xl w-full ${sizes[size]} transform transition-all`}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <h3 id="modal-title" className="text-lg font-semibold text-gray-900">{title}</h3>
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Close modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
           

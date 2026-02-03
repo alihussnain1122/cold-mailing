@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
-import { Card, Button, Input, Alert } from '../components/UI';
-import { configAPI } from '../services/api';
+import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock } from 'lucide-react';
+import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
+import { getCredentials, saveCredentials, clearCredentials, isConfigured, isSecureContext } from '../services/credentials';
 
 export default function Settings() {
   const [config, setConfig] = useState({
@@ -9,36 +9,47 @@ export default function Settings() {
     smtpPort: '587',
     emailUser: '',
     emailPass: '',
+    senderName: 'Support Team',
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [configured, setConfigured] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [secureConnection, setSecureConnection] = useState(true);
 
   useEffect(() => {
     loadConfig();
+    setSecureConnection(isSecureContext());
   }, []);
 
-  async function loadConfig() {
-    try {
-      const data = await configAPI.get();
-      setConfig({
-        smtpHost: data.smtpHost || '',
-        smtpPort: data.smtpPort || '587',
-        emailUser: data.emailUser || '',
-        emailPass: '',
-      });
-      setConfigured(data.configured);
-    } catch (err) {
-      setError('Failed to load configuration');
-    } finally {
-      setLoading(false);
+  // Auto-dismiss messages
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
     }
+  }, [error, success]);
+
+  function loadConfig() {
+    const creds = getCredentials();
+    if (creds) {
+      setConfig({
+        smtpHost: creds.smtpHost || '',
+        smtpPort: creds.smtpPort || '587',
+        emailUser: creds.emailUser || '',
+        emailPass: creds.emailPass || '',
+        senderName: creds.senderName || 'Support Team',
+      });
+    }
+    setConfigured(isConfigured());
   }
 
-  async function handleSave(e) {
+  function handleSave(e) {
     e.preventDefault();
     
     if (!config.smtpHost || !config.emailUser || !config.emailPass) {
@@ -50,131 +61,308 @@ export default function Settings() {
     setError('');
 
     try {
-      await configAPI.update(config);
-      setSuccess('Settings saved successfully');
-      setConfigured(true);
+      const saved = saveCredentials(config);
+      if (saved) {
+        setSuccess('Settings saved to your browser. Your credentials are stored locally and never sent to our servers.');
+        setConfigured(true);
+      } else {
+        setError('Failed to save settings');
+      }
     } catch (err) {
-      setError(err.message);
+      setError('Failed to save settings');
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+  function handleClear() {
+    setClearConfirm(true);
+  }
+
+  function confirmClear() {
+    clearCredentials();
+    setConfig({
+      smtpHost: '',
+      smtpPort: '587',
+      emailUser: '',
+      emailPass: '',
+      senderName: 'Support Team',
+    });
+    setConfigured(false);
+    setSuccess('Credentials cleared');
+    setClearConfirm(false);
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-        <p className="text-gray-500 mt-1">Configure your SMTP email settings</p>
+    <div className="space-y-8">
+      {/* Security Warning */}
+      {!secureConnection && (
+        <Alert 
+          type="error" 
+          message="Warning: You're not using HTTPS. Your credentials could be intercepted. Only use this on localhost for testing." 
+        />
+      )}
+
+      {/* Page Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+          <p className="text-gray-500 mt-1">Configure your SMTP email server settings</p>
+        </div>
+        <Badge variant={configured ? 'success' : 'warning'} size="md">
+          {configured ? (
+            <>
+              <CheckCircle className="w-4 h-4 mr-1.5" />
+              Connected
+            </>
+          ) : (
+            <>
+              <AlertCircle className="w-4 h-4 mr-1.5" />
+              Not Configured
+            </>
+          )}
+        </Badge>
       </div>
 
       {error && <Alert type="error" message={error} />}
       {success && <Alert type="success" message={success} />}
 
-      <Card title="SMTP Configuration" className="max-w-2xl">
-        <div className="mb-6">
-          <div className={`flex items-center gap-2 p-3 rounded-lg ${
-            configured ? 'bg-green-50' : 'bg-yellow-50'
-          }`}>
-            {configured ? (
-              <>
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-sm text-green-700 font-medium">SMTP is configured</span>
-              </>
-            ) : (
-              <>
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                <span className="text-sm text-yellow-700 font-medium">SMTP not configured yet</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        <form onSubmit={handleSave} className="space-y-4">
-          <Input
-            label="SMTP Host"
-            placeholder="e.g., smtp.gmail.com"
-            value={config.smtpHost}
-            onChange={(e) => setConfig({ ...config, smtpHost: e.target.value })}
-          />
-
-          <Input
-            label="SMTP Port"
-            placeholder="587"
-            value={config.smtpPort}
-            onChange={(e) => setConfig({ ...config, smtpPort: e.target.value })}
-          />
-
-          <Input
-            label="Email Address"
-            type="email"
-            placeholder="your-email@gmail.com"
-            value={config.emailUser}
-            onChange={(e) => setConfig({ ...config, emailUser: e.target.value })}
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              App Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter app password"
-                value={config.emailPass}
-                onChange={(e) => setConfig({ ...config, emailPass: e.target.value })}
-                className="w-full px-4 py-2.5 pr-12 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Form */}
+        <div className="lg:col-span-2">
+          <Card>
+            {/* Status Banner */}
+            <div className={`mb-6 p-4 rounded-xl flex items-center gap-4 ${
+              configured 
+                ? 'bg-linear-to-r from-green-50 to-emerald-50 border border-green-200' 
+                : 'bg-linear-to-r from-amber-50 to-yellow-50 border border-amber-200'
+            }`}>
+              <div className={`p-3 rounded-xl ${configured ? 'bg-green-100' : 'bg-amber-100'}`}>
+                <Shield className={`w-6 h-6 ${configured ? 'text-green-600' : 'text-amber-600'}`} />
+              </div>
+              <div>
+                <h3 className={`font-semibold ${configured ? 'text-green-800' : 'text-amber-800'}`}>
+                  {configured ? 'SMTP Server Connected' : 'SMTP Configuration Required'}
+                </h3>
+                <p className={`text-sm ${configured ? 'text-green-600' : 'text-amber-600'}`}>
+                  {configured 
+                    ? 'Your email server is configured and ready to send emails' 
+                    : 'Configure your SMTP settings to start sending emails'}
+                </p>
+              </div>
             </div>
-            <p className="mt-1.5 text-xs text-gray-500">
-              For Gmail, use an App Password instead of your regular password
-            </p>
-          </div>
 
-          <div className="pt-4">
-            <Button type="submit" disabled={saving}>
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Settings'}
-            </Button>
-          </div>
-        </form>
-      </Card>
+            <form onSubmit={handleSave} className="space-y-6">
+              {/* Sender Info Section */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <User className="w-4 h-4 text-gray-500" />
+                  Sender Information
+                </h4>
+                <Input
+                  label="Sender Name"
+                  placeholder="e.g., Support Team, Your Company"
+                  value={config.senderName}
+                  onChange={(e) => setConfig({ ...config, senderName: e.target.value })}
+                  hint="This name will appear as the sender in recipients' inboxes"
+                />
+              </div>
 
-      {/* Help Section */}
-      <Card title="Setup Instructions" className="max-w-2xl">
-        <div className="prose prose-sm text-gray-600">
-          <h4 className="text-gray-900 font-medium">For Gmail:</h4>
-          <ol className="space-y-2 mt-2">
-            <li>Go to your Google Account settings</li>
-            <li>Navigate to Security → 2-Step Verification (enable if not already)</li>
-            <li>Go to Security → App passwords</li>
-            <li>Generate a new app password for "Mail"</li>
-            <li>Use <strong>smtp.gmail.com</strong> as SMTP host</li>
-            <li>Use port <strong>587</strong></li>
-          </ol>
+              {/* Server Settings Section */}
+              <div className="pt-4 border-t border-gray-100">
+                <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Server className="w-4 h-4 text-gray-500" />
+                  Server Settings
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <Input
+                      label="SMTP Host"
+                      placeholder="smtp.gmail.com"
+                      value={config.smtpHost}
+                      onChange={(e) => setConfig({ ...config, smtpHost: e.target.value })}
+                    />
+                  </div>
+                  <Input
+                    label="Port"
+                    placeholder="587"
+                    value={config.smtpPort}
+                    onChange={(e) => setConfig({ ...config, smtpPort: e.target.value })}
+                  />
+                </div>
+              </div>
 
-          <h4 className="text-gray-900 font-medium mt-6">For Other Providers:</h4>
-          <ul className="space-y-1 mt-2">
-            <li><strong>Outlook:</strong> smtp.office365.com, port 587</li>
-            <li><strong>Yahoo:</strong> smtp.mail.yahoo.com, port 587</li>
-            <li><strong>Zoho:</strong> smtp.zoho.com, port 587</li>
-          </ul>
+              {/* Authentication Section */}
+              <div className="pt-4 border-t border-gray-100">
+                <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Key className="w-4 h-4 text-gray-500" />
+                  Authentication
+                </h4>
+                <div className="space-y-4">
+                  <Input
+                    label="Email Address"
+                    type="email"
+                    placeholder="your-email@gmail.com"
+                    value={config.emailUser}
+                    onChange={(e) => setConfig({ ...config, emailUser: e.target.value })}
+                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      App Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter your app password"
+                        value={config.emailPass}
+                        onChange={(e) => setConfig({ ...config, emailPass: e.target.value })}
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" aria-hidden="true" /> : <Eye className="w-5 h-5" aria-hidden="true" />}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" />
+                      For Gmail, use an App Password instead of your regular password
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-100 flex flex-wrap gap-3">
+                <Button type="submit" loading={saving}>
+                  <Save className="w-4 h-4 mr-2" aria-hidden="true" />
+                  Save Configuration
+                </Button>
+                {configured && (
+                  <Button type="button" variant="outline" onClick={handleClear}>
+                    <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+                    Clear Credentials
+                  </Button>
+                )}
+              </div>
+
+              {/* Security Notice */}
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <Lock className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 text-sm">Your Credentials Stay Private</h4>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Your SMTP credentials are stored only in your browser's local storage. 
+                      They are never saved on our servers. Each user must configure their own email account.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </Card>
         </div>
-      </Card>
+
+        {/* Sidebar Help */}
+        <div className="space-y-6">
+          {/* Quick Setup Guide */}
+          <Card title="Quick Setup Guide" subtitle="Follow these steps">
+            <div className="space-y-4">
+              <SetupStep 
+                number={1} 
+                title="Choose Provider" 
+                description="Select your email provider (Gmail, Outlook, etc.)"
+                completed={!!config.smtpHost}
+              />
+              <SetupStep 
+                number={2} 
+                title="Enter Credentials" 
+                description="Add your email and app password"
+                completed={!!config.emailUser && !!config.emailPass}
+              />
+              <SetupStep 
+                number={3} 
+                title="Test Connection" 
+                description="Save and verify your settings"
+                completed={configured}
+              />
+            </div>
+          </Card>
+
+          {/* Provider Settings */}
+          <Card title="Provider Settings">
+            <div className="space-y-3">
+              <ProviderInfo name="Gmail" host="smtp.gmail.com" port="587" />
+              <ProviderInfo name="Outlook" host="smtp.office365.com" port="587" />
+              <ProviderInfo name="Yahoo" host="smtp.mail.yahoo.com" port="587" />
+              <ProviderInfo name="Zoho" host="smtp.zoho.com" port="587" />
+            </div>
+          </Card>
+
+          {/* Security Note */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-900 text-sm">Security Note</h4>
+                <p className="text-xs text-blue-700 mt-1">
+                  Your credentials are stored only in your browser's local storage and are never sent to our servers.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Clear Credentials Confirmation */}
+      <ConfirmDialog
+        isOpen={clearConfirm}
+        onClose={() => setClearConfirm(false)}
+        onConfirm={confirmClear}
+        title="Clear Credentials"
+        message="Are you sure you want to clear your SMTP credentials? You'll need to reconfigure them to send emails."
+        confirmText="Clear"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
+// Setup Step Component
+function SetupStep({ number, title, description, completed }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
+        completed 
+          ? 'bg-green-100 text-green-700' 
+          : 'bg-gray-100 text-gray-500'
+      }`}>
+        {completed ? <CheckCircle className="w-4 h-4" /> : number}
+      </div>
+      <div>
+        <h5 className={`text-sm font-medium ${completed ? 'text-green-700' : 'text-gray-900'}`}>{title}</h5>
+        <p className="text-xs text-gray-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+// Provider Info Component
+function ProviderInfo({ name, host, port }) {
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+      onClick={() => {
+        navigator.clipboard?.writeText(host);
+      }}
+    >
+      <div>
+        <div className="text-sm font-medium text-gray-900">{name}</div>
+        <div className="text-xs text-gray-500">{host}</div>
+      </div>
+      <Badge variant="default" size="xs">Port {port}</Badge>
     </div>
   );
 }
