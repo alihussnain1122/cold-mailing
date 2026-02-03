@@ -165,7 +165,7 @@ export const sendAPI = {
       }),
     });
   },
-  sendSingle: async (emailData) => {
+  sendSingle: async (emailData, trackingOptions = {}) => {
     const creds = await smtpService.get();
     if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
@@ -187,6 +187,10 @@ export const sendAPI = {
         },
         senderName: emailData.senderName || credentials.senderName || 'Support Team',
         credentials, // Include SMTP credentials
+        // Tracking options
+        campaignId: trackingOptions.campaignId,
+        userId: trackingOptions.userId,
+        enableTracking: trackingOptions.enableTracking !== false, // Default true
       }),
     });
   },

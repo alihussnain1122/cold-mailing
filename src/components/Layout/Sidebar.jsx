@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { Settings, FileText, Users, Send, LayoutDashboard, HelpCircle, ExternalLink } from 'lucide-react';
+import { Settings, FileText, Users, Send, LayoutDashboard, HelpCircle, ExternalLink, BarChart3 } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview & stats' },
   { path: '/templates', label: 'Templates', icon: FileText, description: 'Email templates' },
   { path: '/contacts', label: 'Contacts', icon: Users, description: 'Manage recipients' },
   { path: '/send', label: 'Send Emails', icon: Send, description: 'Start campaign' },
+  { path: '/analytics', label: 'Analytics', icon: BarChart3, description: 'Track & metrics' },
   { path: '/settings', label: 'Settings', icon: Settings, description: 'SMTP config' },
 ];
 

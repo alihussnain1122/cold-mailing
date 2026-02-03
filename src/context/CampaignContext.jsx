@@ -1,13 +1,43 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { sendAPI } from '../services/api';
-import { campaignService } from '../services/supabase';
+import { campaignService, bouncedEmailsService, unsubscribedService } from '../services/supabase';
 import { useAuth } from './AuthContext';
+import TimerWorker from '../workers/timerWorker.js?worker';
 
 const CampaignContext = createContext();
 
 // Only log in development
 const isDev = import.meta.env.DEV;
 const log = (...args) => isDev && console.log(...args);
+
+// Helper: Create a delay that works in background tabs using Web Worker
+const createBackgroundDelay = (ms, onTick, stopRef) => {
+  return new Promise((resolve) => {
+    const worker = new TimerWorker();
+    
+    worker.onmessage = (e) => {
+      const { type, remaining } = e.data;
+      
+      if (type === 'tick') {
+        const seconds = Math.ceil(remaining / 1000);
+        onTick?.(seconds);
+        
+        // Check if we should stop
+        if (stopRef?.current) {
+          worker.postMessage({ type: 'stop' });
+        }
+      }
+      
+      if (type === 'complete' || type === 'stopped') {
+        worker.terminate();
+        resolve();
+      }
+    };
+    
+    worker.postMessage({ type: 'start', duration: ms });
+  });
+};
+
 
 export const useCampaign = () => {
   const context = useContext(CampaignContext);
@@ -217,6 +247,21 @@ export const CampaignProvider = ({ children }) => {
         log(`Sending email ${email.sort_order + 1} to ${email.contact_email}`);
 
         try {
+          // Check if email is bounced or unsubscribed
+          const [isBounced, isUnsubscribed] = await Promise.all([
+            bouncedEmailsService.isEmailBounced(email.contact_email),
+            unsubscribedService.isEmailUnsubscribed(email.contact_email),
+          ]);
+
+          if (isBounced || isUnsubscribed) {
+            log(`⊘ Skipping ${email.contact_email} - ${isBounced ? 'bounced' : 'unsubscribed'}`);
+            await campaignService.markEmailFailed(email.id, isBounced ? 'Bounced email' : 'Unsubscribed');
+            currentFailed++;
+            await campaignService.updateProgress(campaignId, { failed_count: currentFailed });
+            setCampaignState(prev => ({ ...prev, failed: currentFailed }));
+            continue;
+          }
+
           const emailData = {
             to: email.contact_email,
             subject: email.template_subject,
@@ -224,12 +269,17 @@ export const CampaignProvider = ({ children }) => {
             senderName: senderName || 'Support Team',
           };
 
-          await sendAPI.sendSingle(emailData);
+          // Pass tracking options
+          const result = await sendAPI.sendSingle(emailData, {
+            campaignId,
+            userId: user?.id,
+            enableTracking: true,
+          });
           
-          log(`✓ Email sent to ${email.contact_email}`);
+          log(`✓ Email sent to ${email.contact_email}`, result.trackingId ? `(tracking: ${result.trackingId})` : '');
           
-          // Mark as sent in Supabase
-          await campaignService.markEmailSent(email.id);
+          // Mark as sent in Supabase with tracking ID
+          await campaignService.markEmailSent(email.id, result.trackingId);
           
           // Update campaign sent count
           currentSent++;
@@ -242,27 +292,34 @@ export const CampaignProvider = ({ children }) => {
             sent: currentSent,
           }));
 
-          // Delay between emails
+          // Delay between emails - uses Web Worker to work in background tabs
           if (i < pendingEmails.length - 1 && (delayMin > 0 || delayMax > 0)) {
             const randomDelayMs = Math.floor(Math.random() * (delayMax - delayMin) + delayMin);
-            const delaySeconds = Math.floor(randomDelayMs / 1000);
             
-            log(`Waiting ${delaySeconds} seconds before next email...`);
+            log(`Waiting ${Math.ceil(randomDelayMs / 1000)} seconds before next email...`);
             
-            for (let countdown = delaySeconds; countdown > 0; countdown--) {
-              if (stopRef.current) break;
-              
-              // Check for remote pause every 5 seconds during countdown
-              if (countdown % 5 === 0) {
-                const paused = await checkIfPaused();
-                if (paused) break;
-              }
-              
-              setCampaignState(prev => ({ ...prev, nextEmailIn: countdown }));
-              await new Promise(resolve => setTimeout(resolve, 1000));
+            // Check for pause before starting delay
+            if (stopRef.current || await checkIfPaused()) {
+              log('Pause detected, stopping before delay');
+              break;
             }
             
+            // Use Web Worker for background-safe timing
+            await createBackgroundDelay(
+              randomDelayMs,
+              (secondsRemaining) => {
+                setCampaignState(prev => ({ ...prev, nextEmailIn: secondsRemaining }));
+              },
+              stopRef
+            );
+            
             setCampaignState(prev => ({ ...prev, nextEmailIn: 0 }));
+            
+            // Check for pause after delay
+            if (stopRef.current || await checkIfPaused()) {
+              log('Pause detected after delay');
+              break;
+            }
           }
 
         } catch (error) {

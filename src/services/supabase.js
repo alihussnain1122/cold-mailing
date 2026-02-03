@@ -397,13 +397,18 @@ export const campaignService = {
   },
 
   // Mark an email as sent
-  async markEmailSent(emailId) {
+  async markEmailSent(emailId, trackingId = null) {
+    const updateData = { 
+      status: 'sent', 
+      sent_at: new Date().toISOString(),
+    };
+    if (trackingId) {
+      updateData.tracking_id = trackingId;
+    }
+    
     const { error } = await supabase
       .from('campaign_emails')
-      .update({ 
-        status: 'sent', 
-        sent_at: new Date().toISOString() 
-      })
+      .update(updateData)
       .eq('id', emailId);
     
     if (error) throw error;
@@ -450,5 +455,197 @@ export const campaignService = {
     if (channel) {
       supabase.removeChannel(channel);
     }
+  }
+};
+
+// ==================
+// EMAIL TRACKING
+// ==================
+export const trackingService = {
+  // Get tracking stats for a campaign
+  async getCampaignStats(campaignId) {
+    const { data, error } = await supabase
+      .from('email_tracking')
+      .select('tracking_type, created_at')
+      .eq('campaign_id', campaignId);
+    
+    if (error) throw error;
+    
+    const stats = {
+      opens: 0,
+      uniqueOpens: new Set(),
+      clicks: 0,
+      uniqueClicks: new Set(),
+      bounces: 0,
+      unsubscribes: 0,
+    };
+    
+    (data || []).forEach(event => {
+      switch (event.tracking_type) {
+        case 'open':
+          stats.opens++;
+          break;
+        case 'click':
+          stats.clicks++;
+          break;
+        case 'bounce':
+          stats.bounces++;
+          break;
+        case 'unsubscribe':
+          stats.unsubscribes++;
+          break;
+      }
+    });
+    
+    return {
+      opens: stats.opens,
+      clicks: stats.clicks,
+      bounces: stats.bounces,
+      unsubscribes: stats.unsubscribes,
+    };
+  },
+
+  // Get all tracking events for a campaign
+  async getCampaignEvents(campaignId) {
+    const { data, error } = await supabase
+      .from('email_tracking')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get user's overall stats
+  async getUserStats() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('email_tracking')
+      .select('tracking_type')
+      .eq('user_id', user.id);
+    
+    if (error) throw error;
+    
+    const stats = { opens: 0, clicks: 0, bounces: 0, unsubscribes: 0 };
+    (data || []).forEach(event => {
+      if (stats[event.tracking_type + 's'] !== undefined) {
+        stats[event.tracking_type + 's']++;
+      }
+    });
+    
+    return stats;
+  }
+};
+
+// ==================
+// BOUNCED EMAILS
+// ==================
+export const bouncedEmailsService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('bounced_emails')
+      .select('*')
+      .order('bounced_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  async add(email, bounceType, reason = null, campaignId = null) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('bounced_emails')
+      .upsert({
+        user_id: user.id,
+        email,
+        bounce_type: bounceType,
+        reason,
+        campaign_id: campaignId,
+        bounced_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,email' })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase
+      .from('bounced_emails')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+
+  async isEmailBounced(email) {
+    const { data, error } = await supabase
+      .from('bounced_emails')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return !!data;
+  }
+};
+
+// ==================
+// UNSUBSCRIBED EMAILS
+// ==================
+export const unsubscribedService = {
+  async getAll() {
+    const { data, error } = await supabase
+      .from('unsubscribed_emails')
+      .select('*')
+      .order('unsubscribed_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  async add(email, reason = null, campaignId = null) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('unsubscribed_emails')
+      .upsert({
+        user_id: user.id,
+        email,
+        reason,
+        campaign_id: campaignId,
+      }, { onConflict: 'user_id,email' })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await supabase
+      .from('unsubscribed_emails')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+
+  async isEmailUnsubscribed(email) {
+    const { data, error } = await supabase
+      .from('unsubscribed_emails')
+      .select('id')
+      .eq('email', email)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return !!data;
   }
 };
