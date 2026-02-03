@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle } from 'lucide-react';
+import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle, Activity, Cloud } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, PageLoader } from '../components/UI';
 import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { sendAPI } from '../services/api';
@@ -269,7 +269,22 @@ export default function SendEmails() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              {campaign.isRunning ? (
+              {campaign.isRunningElsewhere ? (
+                <div className="w-full">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3 flex items-center gap-3">
+                    <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-blue-900">Campaign running on another device</div>
+                      <div className="text-xs text-blue-600">Progress: {campaign.sent}/{campaign.total} sent</div>
+                    </div>
+                    <Cloud className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <Button variant="outline" onClick={handleStop} className="w-full">
+                    <Square className="w-4 h-4 mr-2" aria-hidden="true" />
+                    Pause Campaign
+                  </Button>
+                </div>
+              ) : campaign.isRunning ? (
                 <>
                   <Button variant="danger" onClick={handleStop} className="flex-1">
                     <Square className="w-4 h-4 mr-2" aria-hidden="true" />

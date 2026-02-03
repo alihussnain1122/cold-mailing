@@ -262,3 +262,193 @@ export const smtpService = {
     return !!(config?.smtpHost && config?.emailUser && config?.emailPass);
   }
 };
+
+// ==================
+// CAMPAIGNS - Synced across devices
+// ==================
+export const campaignService = {
+  // Get active campaign (running or paused)
+  async getActive() {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .in('status', ['running', 'paused'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  // Get campaign by ID
+  async getById(id) {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Create a new campaign
+  async create(contacts, config) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Create the campaign record
+    const { data: campaign, error: campaignError } = await supabase
+      .from('campaigns')
+      .insert({
+        user_id: user.id,
+        status: 'running',
+        total_contacts: contacts.length,
+        sent_count: 0,
+        failed_count: 0,
+        current_index: 0,
+        delay_min: config.delayMin || 10000,
+        delay_max: config.delayMax || 90000,
+        sender_name: config.senderName || 'Support Team',
+        started_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    
+    if (campaignError) throw campaignError;
+
+    // Create campaign_emails records for each contact
+    const emailRecords = contacts.map((contact, index) => ({
+      campaign_id: campaign.id,
+      user_id: user.id,
+      contact_email: contact.email,
+      contact_name: contact.name || '',
+      template_subject: contact.template.subject,
+      template_body: contact.template.body,
+      status: 'pending',
+      sort_order: index,
+    }));
+
+    const { error: emailsError } = await supabase
+      .from('campaign_emails')
+      .insert(emailRecords);
+    
+    if (emailsError) throw emailsError;
+
+    return campaign;
+  },
+
+  // Update campaign status
+  async updateStatus(campaignId, status, extraFields = {}) {
+    const updateData = { status, ...extraFields };
+    
+    if (status === 'completed') {
+      updateData.completed_at = new Date().toISOString();
+    }
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update(updateData)
+      .eq('id', campaignId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Update campaign progress
+  async updateProgress(campaignId, updates) {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update(updates)
+      .eq('id', campaignId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Get pending emails for a campaign
+  async getPendingEmails(campaignId) {
+    const { data, error } = await supabase
+      .from('campaign_emails')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('status', 'pending')
+      .order('sort_order', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Get all emails for a campaign
+  async getCampaignEmails(campaignId) {
+    const { data, error } = await supabase
+      .from('campaign_emails')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('sort_order', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Mark an email as sent
+  async markEmailSent(emailId) {
+    const { error } = await supabase
+      .from('campaign_emails')
+      .update({ 
+        status: 'sent', 
+        sent_at: new Date().toISOString() 
+      })
+      .eq('id', emailId);
+    
+    if (error) throw error;
+  },
+
+  // Mark an email as failed
+  async markEmailFailed(emailId, errorMessage) {
+    const { error } = await supabase
+      .from('campaign_emails')
+      .update({ 
+        status: 'failed', 
+        error_message: errorMessage 
+      })
+      .eq('id', emailId);
+    
+    if (error) throw error;
+  },
+
+  // Delete a campaign and its emails
+  async delete(campaignId) {
+    const { error } = await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', campaignId);
+    
+    if (error) throw error;
+  },
+
+  // Subscribe to campaign changes (real-time)
+  subscribeToChanges(campaignId, callback) {
+    return supabase
+      .channel(`campaign-${campaignId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'campaigns',
+        filter: `id=eq.${campaignId}`,
+      }, callback)
+      .subscribe();
+  },
+
+  // Unsubscribe from campaign changes
+  unsubscribe(channel) {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  }
+};

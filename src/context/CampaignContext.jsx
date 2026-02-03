@@ -1,65 +1,13 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { sendAPI } from '../services/api';
+import { campaignService } from '../services/supabase';
+import { useAuth } from './AuthContext';
 
 const CampaignContext = createContext();
 
 // Only log in development
 const isDev = import.meta.env.DEV;
 const log = (...args) => isDev && console.log(...args);
-
-// LocalStorage key for campaign persistence
-const CAMPAIGN_STORAGE_KEY = 'mailflow_campaign_state';
-
-// Save campaign state to localStorage
-function saveCampaignToStorage(state, data) {
-  try {
-    const toSave = {
-      state: {
-        isRunning: state.isRunning,
-        progress: state.progress,
-        total: state.total,
-        sent: state.sent,
-        failed: state.failed,
-        status: state.status,
-        currentTemplate: state.currentTemplate,
-      },
-      data: data ? {
-        contacts: data.contacts,
-        config: data.config,
-        currentIndex: data.currentIndex,
-      } : null,
-      savedAt: Date.now(),
-    };
-    localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(toSave));
-  } catch (e) {
-    log('Failed to save campaign state:', e);
-  }
-}
-
-// Load campaign state from localStorage
-function loadCampaignFromStorage() {
-  try {
-    const stored = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
-    if (!stored) return null;
-    
-    const parsed = JSON.parse(stored);
-    
-    // Don't restore if saved more than 24 hours ago
-    if (Date.now() - parsed.savedAt > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
-      return null;
-    }
-    
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-// Clear campaign from localStorage
-function clearCampaignStorage() {
-  localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
-}
 
 export const useCampaign = () => {
   const context = useContext(CampaignContext);
@@ -70,7 +18,10 @@ export const useCampaign = () => {
 };
 
 export const CampaignProvider = ({ children }) => {
+  const { user } = useAuth();
+  
   const [campaignState, setCampaignState] = useState({
+    campaignId: null,
     isRunning: false,
     currentEmail: '',
     progress: 0,
@@ -79,132 +30,245 @@ export const CampaignProvider = ({ children }) => {
     failed: 0,
     status: 'idle', // idle, running, paused, completed, error
     error: null,
-    nextEmailIn: 0, // seconds until next email
-    currentTemplate: null
+    nextEmailIn: 0,
+    currentTemplate: null,
+    isExecuting: false, // true if THIS browser is executing the campaign
   });
 
   const stopRef = useRef(false);
-  const campaignDataRef = useRef(null);
-  const hasRestoredRef = useRef(false);
+  const executingRef = useRef(false);
+  const subscriptionRef = useRef(null);
 
-  // Restore campaign state on mount
+  // Load active campaign on mount or when user changes
   useEffect(() => {
-    if (hasRestoredRef.current) return;
-    hasRestoredRef.current = true;
-
-    const saved = loadCampaignFromStorage();
-    if (saved && saved.data && saved.state.status === 'running') {
-      log('Restoring campaign from storage:', saved);
-      
-      // Restore state first
-      setCampaignState({
-        isRunning: false, // Will be set to true when resumed
-        currentEmail: '',
-        progress: saved.state.progress,
-        total: saved.state.total,
-        sent: saved.state.sent,
-        failed: saved.state.failed,
-        status: 'paused', // Show as paused until user resumes
-        error: null,
-        nextEmailIn: 0,
-        currentTemplate: saved.state.currentTemplate,
-      });
-      
-      // Store data for resume
-      campaignDataRef.current = saved.data;
-    }
-  }, []);
-
-  // Save state to localStorage when campaign is running
-  useEffect(() => {
-    if (campaignState.status === 'running' || campaignState.status === 'paused') {
-      saveCampaignToStorage(campaignState, campaignDataRef.current);
-    } else if (campaignState.status === 'completed' || campaignState.status === 'idle') {
-      clearCampaignStorage();
-    }
-  }, [campaignState]);
-
-  // Internal function to run campaign from a specific index
-  const runCampaignFromIndex = useCallback(async (contacts, config, startIndex, initialSent, initialFailed) => {
-    stopRef.current = false;
-
-    for (let i = startIndex; i < contacts.length; i++) {
-      if (stopRef.current) {
-        log('Campaign stopped by user');
-        setCampaignState(prev => ({
-          ...prev,
-          isRunning: false,
-          status: 'paused'
-        }));
-        return;
-      }
-
-      const contact = contacts[i];
-      campaignDataRef.current.currentIndex = i;
-
+    if (!user) {
       setCampaignState(prev => ({
         ...prev,
-        currentEmail: contact.email,
-        progress: i + 1,
-        currentTemplate: contact.template.subject
+        campaignId: null,
+        status: 'idle',
+        isRunning: false,
+        isExecuting: false,
       }));
-
-      log(`Sending email ${i + 1}/${contacts.length} to ${contact.email}`);
-
-      try {
-        const emailData = {
-          to: contact.email,
-          subject: contact.template.subject,
-          html: contact.template.body,
-          senderName: config.senderName || 'Support Team'
-        };
-
-        await sendAPI.sendSingle(emailData);
-        
-        log(`✓ Email sent to ${contact.email}`);
-        setCampaignState(prev => ({
-          ...prev,
-          sent: prev.sent + 1
-        }));
-
-        // Delay between emails with countdown (random delay between min and max)
-        if (i < contacts.length - 1 && (config.delayMin > 0 || config.delayMax > 0)) {
-          const randomDelayMs = Math.floor(Math.random() * (config.delayMax - config.delayMin) + config.delayMin);
-          const delaySeconds = Math.floor(randomDelayMs / 1000);
-          
-          log(`Waiting ${delaySeconds} seconds before next email...`);
-          
-          for (let countdown = delaySeconds; countdown > 0; countdown--) {
-            if (stopRef.current) break;
-            setCampaignState(prev => ({
-              ...prev,
-              nextEmailIn: countdown
-            }));
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          
-          setCampaignState(prev => ({ ...prev, nextEmailIn: 0 }));
-        }
-
-      } catch (error) {
-        log(`✗ Failed to send to ${contact.email}:`, error);
-        setCampaignState(prev => ({
-          ...prev,
-          failed: prev.failed + 1,
-          error: error.message
-        }));
-      }
+      return;
     }
 
-    // Campaign completed
-    log('Campaign completed');
-    clearCampaignStorage();
-    setCampaignState(prev => ({
-      ...prev,
-      isRunning: false,
-      status: 'completed',
-      currentEmail: ''
-    }));
+    loadActiveCampaign();
+  }, [user]);
+
+  // Subscribe to real-time updates when we have a campaign
+  useEffect(() => {
+    const { campaignId, isExecuting } = campaignState;
+    
+    // Only subscribe if we have a campaign and we're NOT the one executing
+    // (if we're executing, we update state ourselves)
+    if (!campaignId || isExecuting) {
+      return;
+    }
+
+    log('Subscribing to campaign updates:', campaignId);
+    
+    subscriptionRef.current = campaignService.subscribeToChanges(campaignId, (payload) => {
+      log('Campaign update received:', payload);
+      const campaign = payload.new;
+      
+      if (campaign) {
+        setCampaignState(prev => ({
+          ...prev,
+          status: campaign.status,
+          sent: campaign.sent_count,
+          failed: campaign.failed_count,
+          progress: campaign.current_index,
+          currentEmail: campaign.current_email || '',
+          currentTemplate: campaign.current_template || '',
+          isRunning: campaign.status === 'running',
+          error: campaign.error_message,
+        }));
+      }
+    });
+
+    return () => {
+      if (subscriptionRef.current) {
+        campaignService.unsubscribe(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
+    };
+  }, [campaignState.campaignId, campaignState.isExecuting]);
+
+  async function loadActiveCampaign() {
+    try {
+      const campaign = await campaignService.getActive();
+      
+      if (campaign) {
+        log('Found active campaign:', campaign);
+        setCampaignState({
+          campaignId: campaign.id,
+          isRunning: campaign.status === 'running',
+          currentEmail: campaign.current_email || '',
+          progress: campaign.current_index,
+          total: campaign.total_contacts,
+          sent: campaign.sent_count,
+          failed: campaign.failed_count,
+          status: campaign.status,
+          error: campaign.error_message,
+          nextEmailIn: 0,
+          currentTemplate: campaign.current_template,
+          isExecuting: false, // Not executing until user clicks resume
+        });
+      }
+    } catch (err) {
+      log('Error loading active campaign:', err);
+    }
+  }
+
+  // Internal function to execute the campaign
+  const executeCampaign = useCallback(async (campaignId, senderName, delayMin, delayMax) => {
+    if (executingRef.current) {
+      log('Already executing a campaign');
+      return;
+    }
+
+    executingRef.current = true;
+    stopRef.current = false;
+
+    setCampaignState(prev => ({ ...prev, isExecuting: true }));
+
+    try {
+      // Get pending emails
+      let pendingEmails = await campaignService.getPendingEmails(campaignId);
+      
+      // Get current counts
+      let currentSent = 0;
+      let currentFailed = 0;
+      setCampaignState(prev => {
+        currentSent = prev.sent;
+        currentFailed = prev.failed;
+        return prev;
+      });
+      
+      log(`Executing campaign with ${pendingEmails.length} pending emails`);
+
+      for (let i = 0; i < pendingEmails.length; i++) {
+        if (stopRef.current) {
+          log('Campaign stopped by user');
+          await campaignService.updateStatus(campaignId, 'paused');
+          setCampaignState(prev => ({
+            ...prev,
+            isRunning: false,
+            status: 'paused',
+            isExecuting: false,
+          }));
+          executingRef.current = false;
+          return;
+        }
+
+        const email = pendingEmails[i];
+
+        // Update campaign progress in Supabase
+        await campaignService.updateProgress(campaignId, {
+          current_index: email.sort_order + 1,
+          current_email: email.contact_email,
+          current_template: email.template_subject,
+        });
+
+        setCampaignState(prev => ({
+          ...prev,
+          currentEmail: email.contact_email,
+          progress: email.sort_order + 1,
+          currentTemplate: email.template_subject,
+        }));
+
+        log(`Sending email ${email.sort_order + 1} to ${email.contact_email}`);
+
+        try {
+          const emailData = {
+            to: email.contact_email,
+            subject: email.template_subject,
+            html: email.template_body,
+            senderName: senderName || 'Support Team',
+          };
+
+          await sendAPI.sendSingle(emailData);
+          
+          log(`✓ Email sent to ${email.contact_email}`);
+          
+          // Mark as sent in Supabase
+          await campaignService.markEmailSent(email.id);
+          
+          // Update campaign sent count
+          currentSent++;
+          await campaignService.updateProgress(campaignId, {
+            sent_count: currentSent,
+          });
+
+          setCampaignState(prev => ({
+            ...prev,
+            sent: currentSent,
+          }));
+
+          // Delay between emails
+          if (i < pendingEmails.length - 1 && (delayMin > 0 || delayMax > 0)) {
+            const randomDelayMs = Math.floor(Math.random() * (delayMax - delayMin) + delayMin);
+            const delaySeconds = Math.floor(randomDelayMs / 1000);
+            
+            log(`Waiting ${delaySeconds} seconds before next email...`);
+            
+            for (let countdown = delaySeconds; countdown > 0; countdown--) {
+              if (stopRef.current) break;
+              setCampaignState(prev => ({ ...prev, nextEmailIn: countdown }));
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            setCampaignState(prev => ({ ...prev, nextEmailIn: 0 }));
+          }
+
+        } catch (error) {
+          log(`✗ Failed to send to ${email.contact_email}:`, error);
+          
+          // Mark as failed in Supabase
+          await campaignService.markEmailFailed(email.id, error.message);
+          
+          // Update campaign failed count
+          currentFailed++;
+          await campaignService.updateProgress(campaignId, {
+            failed_count: currentFailed,
+          });
+
+          setCampaignState(prev => ({
+            ...prev,
+            failed: currentFailed,
+            error: error.message,
+          }));
+        }
+      }
+
+      // Campaign completed
+      log('Campaign completed');
+      await campaignService.updateStatus(campaignId, 'completed');
+      
+      setCampaignState(prev => ({
+        ...prev,
+        isRunning: false,
+        status: 'completed',
+        currentEmail: '',
+        isExecuting: false,
+      }));
+
+    } catch (err) {
+      log('Campaign execution error:', err);
+      await campaignService.updateStatus(campaignId, 'error', {
+        error_message: err.message,
+      });
+      
+      setCampaignState(prev => ({
+        ...prev,
+        isRunning: false,
+        status: 'error',
+        error: err.message,
+        isExecuting: false,
+      }));
+    } finally {
+      executingRef.current = false;
+    }
   }, []);
 
   const startCampaign = useCallback(async (contacts, config) => {
@@ -214,7 +278,7 @@ export const CampaignProvider = ({ children }) => {
       setCampaignState(prev => ({
         ...prev,
         status: 'error',
-        error: 'No contacts to send to'
+        error: 'No contacts to send to',
       }));
       return;
     }
@@ -225,72 +289,132 @@ export const CampaignProvider = ({ children }) => {
       setCampaignState(prev => ({
         ...prev,
         status: 'error',
-        error: 'Contacts missing template information'
+        error: 'Contacts missing template information',
       }));
       return;
     }
 
-    // Reset state
-    stopRef.current = false;
-    campaignDataRef.current = { contacts, config, currentIndex: 0 };
+    try {
+      // Create campaign in Supabase
+      const campaign = await campaignService.create(contacts, config);
+      
+      log('Campaign created:', campaign.id);
 
-    setCampaignState({
-      isRunning: true,
-      currentEmail: '',
-      progress: 0,
-      total: contacts.length,
-      sent: 0,
-      failed: 0,
-      status: 'running',
-      error: null,
-      nextEmailIn: 0,
-      currentTemplate: null
-    });
+      setCampaignState({
+        campaignId: campaign.id,
+        isRunning: true,
+        currentEmail: '',
+        progress: 0,
+        total: contacts.length,
+        sent: 0,
+        failed: 0,
+        status: 'running',
+        error: null,
+        nextEmailIn: 0,
+        currentTemplate: null,
+        isExecuting: true,
+      });
 
-    // Start sending emails from the beginning
-    await runCampaignFromIndex(contacts, config, 0, 0, 0);
-  }, [runCampaignFromIndex]);
+      // Start executing
+      await executeCampaign(
+        campaign.id,
+        config.senderName,
+        config.delayMin,
+        config.delayMax
+      );
 
-  // Resume a paused campaign (from localStorage restore or manual pause)
+    } catch (err) {
+      log('Failed to start campaign:', err);
+      setCampaignState(prev => ({
+        ...prev,
+        status: 'error',
+        error: err.message,
+      }));
+    }
+  }, [executeCampaign]);
+
   const resumeCampaign = useCallback(async () => {
-    if (!campaignDataRef.current) {
-      log('No campaign data to resume');
+    const { campaignId } = campaignState;
+    
+    if (!campaignId) {
+      log('No campaign to resume');
       return;
     }
 
-    const { contacts, config, currentIndex } = campaignDataRef.current;
-    
-    log('Resuming campaign from index:', currentIndex);
+    try {
+      // Get campaign details
+      const campaign = await campaignService.getById(campaignId);
+      
+      if (!campaign) {
+        log('Campaign not found');
+        return;
+      }
 
-    // Get current sent/failed counts from state at resume time
-    let currentSent = 0;
-    let currentFailed = 0;
-    
-    setCampaignState(prev => {
-      currentSent = prev.sent;
-      currentFailed = prev.failed;
-      return {
+      log('Resuming campaign:', campaignId);
+
+      // Update status to running
+      await campaignService.updateStatus(campaignId, 'running');
+
+      setCampaignState(prev => ({
         ...prev,
         isRunning: true,
-        status: 'running'
-      };
-    });
+        status: 'running',
+        isExecuting: true,
+      }));
 
-    // Resume from the current index with accurate counts
-    await runCampaignFromIndex(contacts, config, currentIndex, currentSent, currentFailed);
-  }, [runCampaignFromIndex]);
+      // Resume execution
+      await executeCampaign(
+        campaignId,
+        campaign.sender_name,
+        campaign.delay_min,
+        campaign.delay_max
+      );
 
-  const stopCampaign = useCallback(() => {
+    } catch (err) {
+      log('Failed to resume campaign:', err);
+      setCampaignState(prev => ({
+        ...prev,
+        status: 'error',
+        error: err.message,
+      }));
+    }
+  }, [campaignState.campaignId, executeCampaign]);
+
+  const stopCampaign = useCallback(async () => {
     log('Stopping campaign...');
     stopRef.current = true;
-  }, []);
+    
+    // If we're not executing, we need to update Supabase directly
+    if (!executingRef.current && campaignState.campaignId) {
+      try {
+        await campaignService.updateStatus(campaignState.campaignId, 'paused');
+        setCampaignState(prev => ({
+          ...prev,
+          isRunning: false,
+          status: 'paused',
+        }));
+      } catch (err) {
+        log('Failed to pause campaign:', err);
+      }
+    }
+  }, [campaignState.campaignId]);
 
-  const resetCampaign = useCallback(() => {
+  const resetCampaign = useCallback(async () => {
     log('Resetting campaign...');
     stopRef.current = true;
-    campaignDataRef.current = null;
-    clearCampaignStorage();
+    
+    const { campaignId } = campaignState;
+    
+    if (campaignId) {
+      try {
+        await campaignService.delete(campaignId);
+      } catch (err) {
+        log('Failed to delete campaign:', err);
+      }
+    }
+
     setCampaignState({
+      campaignId: null,
       isRunning: false,
       currentEmail: '',
       progress: 0,
@@ -300,12 +424,18 @@ export const CampaignProvider = ({ children }) => {
       status: 'idle',
       error: null,
       nextEmailIn: 0,
-      currentTemplate: null
+      currentTemplate: null,
+      isExecuting: false,
     });
-  }, []);
+  }, [campaignState.campaignId]);
 
   // Check if there's a paused campaign that can be resumed
-  const canResume = campaignState.status === 'paused' && campaignDataRef.current !== null;
+  const canResume = campaignState.status === 'paused' && 
+                    campaignState.campaignId !== null && 
+                    !campaignState.isExecuting;
+
+  // Check if campaign is running on another device
+  const isRunningElsewhere = campaignState.isRunning && !campaignState.isExecuting;
 
   const value = {
     ...campaignState,
@@ -313,7 +443,8 @@ export const CampaignProvider = ({ children }) => {
     stopCampaign,
     resetCampaign,
     resumeCampaign,
-    canResume
+    canResume,
+    isRunningElsewhere,
   };
 
   return (
