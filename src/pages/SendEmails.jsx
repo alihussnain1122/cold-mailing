@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle, Activity, Cloud, Bell, BellOff, Timer, Calendar, X } from 'lucide-react';
+import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle, Activity, Cloud, Bell, BellOff, Timer } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, PageLoader, useMarkTestEmailSent, useMarkFirstCampaignSent } from '../components/UI';
 import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { sendAPI } from '../services/api';
@@ -33,12 +33,6 @@ export default function SendEmails() {
   const markTestEmailSent = useMarkTestEmailSent();
   const markFirstCampaignSent = useMarkFirstCampaignSent();
   const [notificationPermission, setNotificationPermission] = useState('default');
-  
-  // Scheduling state
-  const [showScheduler, setShowScheduler] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
-  const [scheduling, setScheduling] = useState(false);
 
   // Use campaign context
   const campaign = useCampaign();
@@ -202,84 +196,6 @@ export default function SendEmails() {
     campaign.resetCampaign();
     setSuccess('');
     setError('');
-  }
-
-  async function handleScheduleCampaign() {
-    if (!scheduleDate || !scheduleTime) {
-      setError('Please select a date and time for scheduling');
-      return;
-    }
-    
-    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`);
-    
-    if (scheduledAt <= new Date()) {
-      setError('Scheduled time must be in the future');
-      return;
-    }
-    
-    if (selectedContacts.length === 0) {
-      setError('Please select at least one contact');
-      return;
-    }
-    if (selectedTemplates.length === 0) {
-      setError('Please select at least one template');
-      return;
-    }
-    
-    setScheduling(true);
-    setError('');
-    
-    try {
-      const selectedTemplateObjects = selectedTemplates.map(i => templates[i]).filter(Boolean);
-      
-      // Create campaign data for scheduling
-      const campaignContacts = selectedContacts.map((contact, index) => {
-        const templateIndex = index % selectedTemplateObjects.length;
-        const template = selectedTemplateObjects[templateIndex];
-        return {
-          email: contact.email || contact,
-          name: contact.name || '',
-          company: contact.company || '',
-          template
-        };
-      });
-      
-      // Schedule the campaign using context
-      await campaign.scheduleCampaign(
-        campaignContacts,
-        {
-          delayMin: delayMin * 1000,
-          delayMax: delayMax * 1000,
-          senderName: senderName || 'Support Team',
-          scheduledAt: scheduledAt.toISOString(),
-        }
-      );
-      
-      setSuccess(`Campaign scheduled for ${scheduledAt.toLocaleString()}`);
-      setShowScheduler(false);
-      setScheduleDate('');
-      setScheduleTime('');
-    } catch (err) {
-      setError('Failed to schedule campaign: ' + err.message);
-    } finally {
-      setScheduling(false);
-    }
-  }
-
-  // Get minimum date for scheduling (now)
-  function getMinDate() {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
-  }
-  
-  // Get minimum time if date is today
-  function getMinTime() {
-    if (scheduleDate === getMinDate()) {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + 5); // At least 5 minutes from now
-      return now.toTimeString().slice(0, 5);
-    }
-    return '00:00';
   }
 
   async function handleTestEmail() {
@@ -513,14 +429,6 @@ export default function SendEmails() {
                     <Play className="w-4 h-4 mr-2" aria-hidden="true" />
                     Start Now
                   </Button>
-                  <Button 
-                    variant="secondary"
-                    onClick={() => setShowScheduler(!showScheduler)}
-                    disabled={selectedTemplates.length === 0 || selectedContacts.length === 0}
-                  >
-                    <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
-                    Schedule
-                  </Button>
                   {campaign.status !== 'idle' && (
                     <Button variant="outline" onClick={handleReset}>
                       Reset
@@ -529,63 +437,6 @@ export default function SendEmails() {
                 </>
               )}
             </div>
-            
-            {/* Schedule Panel */}
-            {showScheduler && (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-blue-900 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Schedule Campaign
-                  </h4>
-                  <button 
-                    onClick={() => setShowScheduler(false)}
-                    className="p-1 hover:bg-blue-100 rounded"
-                  >
-                    <X className="w-4 h-4 text-blue-700" />
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-800 mb-1">Date</label>
-                    <input
-                      type="date"
-                      value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      min={getMinDate()}
-                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-blue-800 mb-1">Time</label>
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      min={getMinTime()}
-                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    />
-                  </div>
-                </div>
-                
-                {scheduleDate && scheduleTime && (
-                  <p className="text-sm text-blue-700 mb-3">
-                    📅 Will start: {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}
-                  </p>
-                )}
-                
-                <Button 
-                  onClick={handleScheduleCampaign}
-                  loading={scheduling}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={!scheduleDate || !scheduleTime}
-                >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule Campaign
-                </Button>
-              </div>
-            )}
           </div>
         </Card>
 
