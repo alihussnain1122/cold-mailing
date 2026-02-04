@@ -17,6 +17,15 @@ export class ServerError extends Error {
   }
 }
 
+export class BounceError extends Error {
+  constructor(message, email) {
+    super(message);
+    this.name = 'BounceError';
+    this.email = email;
+    this.isBounce = true;
+  }
+}
+
 // Generic fetch wrapper with error handling
 async function fetchAPI(url, options = {}) {
   try {
@@ -31,6 +40,10 @@ async function fetchAPI(url, options = {}) {
     const data = await response.json();
     
     if (!response.ok) {
+      // Check if this is a bounce error
+      if (data.isBounce) {
+        throw new BounceError(data.error || 'Email bounced', data.email);
+      }
       if (response.status >= 500) {
         throw new ServerError(data.error || 'Server error', response.status);
       }

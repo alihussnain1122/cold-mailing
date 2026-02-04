@@ -325,6 +325,22 @@ export const CampaignProvider = ({ children }) => {
         } catch (error) {
           log(`✗ Failed to send to ${email.contact_email}:`, error);
           
+          // Check if this is a bounce error
+          if (error.isBounce || error.name === 'BounceError') {
+            log(`⚠ Bounce detected for ${email.contact_email}`);
+            // Record bounce in database
+            try {
+              await bouncedEmailsService.add(
+                email.contact_email,
+                'hard',
+                error.message,
+                campaignId
+              );
+            } catch (bounceErr) {
+              log('Failed to record bounce:', bounceErr);
+            }
+          }
+          
           // Mark as failed in Supabase
           await campaignService.markEmailFailed(email.id, error.message);
           

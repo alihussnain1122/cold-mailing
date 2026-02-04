@@ -600,9 +600,12 @@ export const bouncedEmailsService = {
       .from('bounced_emails')
       .select('id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
     
-    if (error && error.code !== 'PGRST116') throw error;
+    if (error) {
+      console.error('Error checking bounced email:', error);
+      return false; // Default to not bounced on error
+    }
     return !!data;
   }
 };
@@ -654,9 +657,12 @@ export const unsubscribedService = {
       .from('unsubscribed_emails')
       .select('id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
     
-    if (error && error.code !== 'PGRST116') throw error;
+    if (error) {
+      console.error('Error checking unsubscribed email:', error);
+      return false; // Default to not unsubscribed on error
+    }
     return !!data;
   }
 };
