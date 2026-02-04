@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp } from 'lucide-react';
 import { Card, Badge, Button, PageLoader } from '../components/UI';
-import { trackingService, bouncedEmailsService, campaignService } from '../services/supabase';
+import { trackingService, campaignService } from '../services/supabase';
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
@@ -9,7 +9,6 @@ export default function Analytics() {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignStats, setCampaignStats] = useState(null);
   const [trackingEvents, setTrackingEvents] = useState([]);
-  const [bouncedEmails, setBouncedEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -25,12 +24,8 @@ export default function Analytics() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [campaignsData, bounced] = await Promise.all([
-        campaignService.getAll(),
-        bouncedEmailsService.getAll(),
-      ]);
+      const campaignsData = await campaignService.getAll();
       setCampaigns(campaignsData);
-      setBouncedEmails(bounced);
       if (campaignsData.length > 0) {
         setSelectedCampaign(campaignsData[0].id);
       }
@@ -62,7 +57,6 @@ export default function Analytics() {
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'bounced', label: 'Bounced', count: bouncedEmails.length },
   ];
 
   return (
@@ -157,15 +151,7 @@ export default function Analytics() {
                     : null}
                   color="violet"
                 />
-                <StatCard
-                  icon={XCircle}
-                  label="Bounced"
-                  value={campaignStats?.bounces || 0}
-                  sublabel={currentCampaign?.sent_count > 0 
-                    ? `${((campaignStats?.bounces || 0) / currentCampaign.sent_count * 100).toFixed(1)}% rate`
-                    : null}
-                  color="red"
-                />
+
               </div>
 
               {/* Recent Activity */}
@@ -177,12 +163,10 @@ export default function Analytics() {
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                           event.tracking_type === 'open' ? 'bg-green-100' :
                           event.tracking_type === 'click' ? 'bg-violet-100' :
-                          event.tracking_type === 'bounce' ? 'bg-red-100' :
                           'bg-gray-100'
                         }`}>
                           {event.tracking_type === 'open' && <Eye className="w-4 h-4 text-green-600" />}
                           {event.tracking_type === 'click' && <MousePointer className="w-4 h-4 text-violet-600" />}
-                          {event.tracking_type === 'bounce' && <XCircle className="w-4 h-4 text-red-600" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 truncate">{event.email}</div>
@@ -218,56 +202,6 @@ export default function Analytics() {
                 icon={Mail}
                 title="No campaigns yet"
                 description="Send your first campaign to see analytics"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Bounced Tab */}
-      {activeTab === 'bounced' && (
-        <div className="bg-white border border-gray-200 rounded-xl">
-          <div className="p-5 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Bounced Emails</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              These emails failed to deliver and will be automatically skipped in future campaigns
-            </p>
-          </div>
-          {bouncedEmails.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                    <th className="text-left py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {bouncedEmails.map(email => (
-                    <tr key={email.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-5 text-sm text-gray-900">{email.email}</td>
-                      <td className="py-3 px-5">
-                        <Badge variant={email.bounce_type === 'hard' ? 'error' : 'warning'}>
-                          {email.bounce_type}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-5 text-sm text-gray-500 max-w-xs truncate">{email.reason || '—'}</td>
-                      <td className="py-3 px-5 text-sm text-gray-500">
-                        {new Date(email.bounced_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-8">
-              <EmptyState
-                icon={XCircle}
-                title="No bounced emails"
-                description="Great! All your emails have been delivered successfully"
               />
             </div>
           )}

@@ -528,7 +528,6 @@ export const trackingService = {
       uniqueOpens: new Set(),
       clicks: 0,
       uniqueClicks: new Set(),
-      bounces: 0,
       unsubscribes: 0,
     };
     
@@ -540,9 +539,6 @@ export const trackingService = {
         case 'click':
           stats.clicks++;
           break;
-        case 'bounce':
-          stats.bounces++;
-          break;
         case 'unsubscribe':
           stats.unsubscribes++;
           break;
@@ -552,7 +548,6 @@ export const trackingService = {
     return {
       opens: stats.opens,
       clicks: stats.clicks,
-      bounces: stats.bounces,
       unsubscribes: stats.unsubscribes,
     };
   },
@@ -581,7 +576,7 @@ export const trackingService = {
     
     if (error) throw error;
     
-    const stats = { opens: 0, clicks: 0, bounces: 0, unsubscribes: 0 };
+    const stats = { opens: 0, clicks: 0, unsubscribes: 0 };
     (data || []).forEach(event => {
       if (stats[event.tracking_type + 's'] !== undefined) {
         stats[event.tracking_type + 's']++;
@@ -589,65 +584,6 @@ export const trackingService = {
     });
     
     return stats;
-  }
-};
-
-// ==================
-// BOUNCED EMAILS
-// ==================
-export const bouncedEmailsService = {
-  async getAll() {
-    const { data, error } = await supabase
-      .from('bounced_emails')
-      .select('*')
-      .order('bounced_at', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  },
-
-  async add(email, bounceType, reason = null, campaignId = null) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-      .from('bounced_emails')
-      .upsert({
-        user_id: user.id,
-        email,
-        bounce_type: bounceType,
-        reason,
-        campaign_id: campaignId,
-        bounced_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,email' })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
-
-  async delete(id) {
-    const { error } = await supabase
-      .from('bounced_emails')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  },
-
-  async isEmailBounced(email) {
-    const { data, error } = await supabase
-      .from('bounced_emails')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    
-    if (error) {
-      console.error('Error checking bounced email:', error);
-      return false; // Default to not bounced on error
-    }
-    return !!data;
   }
 };
 

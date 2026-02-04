@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { sendAPI } from '../services/api';
-import { campaignService, bouncedEmailsService, unsubscribedService } from '../services/supabase';
+import { campaignService, unsubscribedService } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import TimerWorker from '../workers/timerWorker.js?worker';
 
@@ -247,15 +247,12 @@ export const CampaignProvider = ({ children }) => {
         log(`Sending email ${email.sort_order + 1} to ${email.contact_email}`);
 
         try {
-          // Check if email is bounced or unsubscribed
-          const [isBounced, isUnsubscribed] = await Promise.all([
-            bouncedEmailsService.isEmailBounced(email.contact_email),
-            unsubscribedService.isEmailUnsubscribed(email.contact_email),
-          ]);
+          // Check if email is unsubscribed
+          const isUnsubscribed = await unsubscribedService.isEmailUnsubscribed(email.contact_email);
 
-          if (isBounced || isUnsubscribed) {
-            log(`⊘ Skipping ${email.contact_email} - ${isBounced ? 'bounced' : 'unsubscribed'}`);
-            await campaignService.markEmailFailed(email.id, isBounced ? 'Bounced email' : 'Unsubscribed');
+          if (isUnsubscribed) {
+            log(`⊘ Skipping ${email.contact_email} - unsubscribed`);
+            await campaignService.markEmailFailed(email.id, 'Unsubscribed');
             currentFailed++;
             await campaignService.updateProgress(campaignId, { failed_count: currentFailed });
             setCampaignState(prev => ({ ...prev, failed: currentFailed }));
