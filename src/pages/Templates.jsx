@@ -127,12 +127,24 @@ export default function Templates() {
 
     try {
       const text = await file.text();
-      const imported = JSON.parse(text);
-      const templatesArray = Array.isArray(imported) ? imported : [imported];
+      let templatesArray = [];
+      
+      // Check if it's a CSV file
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        templatesArray = parseCSV(text);
+      } else {
+        // Try JSON format (backward compatibility)
+        const imported = JSON.parse(text);
+        templatesArray = Array.isArray(imported) ? imported : [imported];
+      }
+      
+      if (templatesArray.length === 0) {
+        throw new Error('No templates found in file');
+      }
       
       await templatesService.bulkAdd(templatesArray);
       await loadTemplates();
-      setSuccess(`Uploaded ${templatesArray.length} templates`);
+      setSuccess(`Uploaded ${templatesArray.length} template${templatesArray.length !== 1 ? 's' : ''}`);
     } catch (err) {
       setError(err.message || 'Failed to upload templates');
     } finally {
@@ -140,6 +152,64 @@ export default function Templates() {
     }
     
     e.target.value = '';
+  }
+
+  function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) {
+      throw new Error('CSV must have at least a header row and one data row');
+    }
+
+    // Parse header
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const nameIdx = headers.indexOf('name');
+    const subjectIdx = headers.indexOf('subject');
+    const bodyIdx = headers.indexOf('body');
+
+    if (subjectIdx === -1 || bodyIdx === -1) {
+      throw new Error('CSV must have "subject" and "body" columns. Optional: "name" column.');
+    }
+
+    // Parse rows
+    const templates = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      // Handle quoted fields (CSV with commas in content)
+      const fields = [];
+      let currentField = '';
+      let inQuotes = false;
+      
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          fields.push(currentField.trim());
+          currentField = '';
+        } else {
+          currentField += char;
+        }
+      }
+      fields.push(currentField.trim());
+
+      const template = {
+        subject: fields[subjectIdx]?.replace(/^"/, '').replace(/"$/, '') || '',
+        body: fields[bodyIdx]?.replace(/^"/, '').replace(/"$/, '').replace(/\\n/g, '\n') || '',
+      };
+
+      if (nameIdx !== -1 && fields[nameIdx]) {
+        template.name = fields[nameIdx].replace(/^"/, '').replace(/"$/, '');
+      }
+
+      if (template.subject && template.body) {
+        templates.push(template);
+      }
+    }
+
+    return templates;
   }
 
   function handleImportClick() {
@@ -161,10 +231,10 @@ export default function Templates() {
           <input 
             type="file" 
             ref={fileInputRef}
-            accept=".json" 
+            accept=".csv,.json" 
             onChange={handleFileUpload} 
             className="hidden"
-            aria-label="Import templates JSON file"
+            aria-label="Import templates CSV or JSON file"
           />
           {templates.length > 0 && (
             <Button variant="danger" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
@@ -174,7 +244,7 @@ export default function Templates() {
           )}
           <Button variant="outline" onClick={handleImportClick} loading={uploading}>
             <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
-            {uploading ? 'Uploading...' : 'Import JSON'}
+            {uploading ? 'Uploading...' : 'Import CSV/JSON'}
           </Button>
           <Button onClick={openAddModal}>
             <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -185,6 +255,38 @@ export default function Templates() {
 
       {error && <Alert type="error" message={error} className="animate-fade-in" />}
       {success && <Alert type="success" message={success} className="animate-fade-in" />}
+
+      {/* Format Help Card */}
+      <Card>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-blue-100 rounded-full p-2 mt-0.5">
+              <Upload className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 mb-1">Easy Template Import</h3>
+              <p className="text-sm text-gray-700 mb-2">
+                Upload templates using <strong>CSV</strong> (Excel/Sheets) or JSON format
+              </p>
+              <details className="text-sm text-gray-600">
+                <summary className="cursor-pointer hover:text-blue-600 font-medium mb-2">
+                  📋 Click to see CSV format example
+                </summary>
+                <div className="mt-2 pl-4 border-l-2 border-blue-200 space-y-2">
+                  <p><strong>Required columns:</strong> subject, body</p>
+                  <p><strong>Optional column:</strong> name (for your reference)</p>
+                  <div className="bg-white rounded p-2 font-mono text-xs overflow-x-auto">
+                    <div>name,subject,body</div>
+                    <div>Welcome,Welcome to Our Service!,"Hi!\n\nWelcome to our platform.\n\nBest regards"</div>
+                  </div>
+                  <p className="text-xs">💡 Use <code className="bg-blue-100 px-1 rounded">\n</code> for line breaks</p>
+                  <p className="text-xs">💡 Open CSV in Excel or Google Sheets to edit easily</p>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {templates.length === 0 ? (
         <Card>
