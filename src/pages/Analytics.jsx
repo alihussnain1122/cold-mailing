@@ -122,7 +122,7 @@ export default function Analytics() {
                 >
                   {campaigns.map(campaign => (
                     <option key={campaign.id} value={campaign.id}>
-                      {campaign.name} — {new Date(campaign.created_at).toLocaleDateString()}
+                      Campaign {new Date(campaign.created_at).toLocaleDateString()} — {campaign.sent_count}/{campaign.total_contacts} sent
                     </option>
                   ))}
                 </select>
@@ -133,15 +133,18 @@ export default function Analytics() {
                 <StatCard
                   icon={Mail}
                   label="Total Sent"
-                  value={currentCampaign?.total_emails || 0}
+                  value={currentCampaign?.sent_count || 0}
+                  sublabel={currentCampaign?.total_contacts > 0 
+                    ? `of ${currentCampaign.total_contacts} contacts`
+                    : null}
                   color="blue"
                 />
                 <StatCard
                   icon={Eye}
                   label="Opens"
                   value={campaignStats?.opens || 0}
-                  sublabel={currentCampaign?.total_emails > 0 
-                    ? `${((campaignStats?.opens || 0) / currentCampaign.total_emails * 100).toFixed(1)}% rate`
+                  sublabel={currentCampaign?.sent_count > 0 
+                    ? `${((campaignStats?.opens || 0) / currentCampaign.sent_count * 100).toFixed(1)}% rate`
                     : null}
                   color="green"
                 />
@@ -158,8 +161,8 @@ export default function Analytics() {
                   icon={XCircle}
                   label="Bounced"
                   value={campaignStats?.bounces || 0}
-                  sublabel={currentCampaign?.total_emails > 0 
-                    ? `${((campaignStats?.bounces || 0) / currentCampaign.total_emails * 100).toFixed(1)}% rate`
+                  sublabel={currentCampaign?.sent_count > 0 
+                    ? `${((campaignStats?.bounces || 0) / currentCampaign.sent_count * 100).toFixed(1)}% rate`
                     : null}
                   color="red"
                 />

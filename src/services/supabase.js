@@ -267,6 +267,17 @@ export const smtpService = {
 // CAMPAIGNS - Synced across devices
 // ==================
 export const campaignService = {
+  // Get all campaigns for analytics
+  async getAll() {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
   // Get active campaign (running or paused)
   async getActive() {
     const { data, error } = await supabase
