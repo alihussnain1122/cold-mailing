@@ -269,26 +269,67 @@ export const smtpService = {
 export const campaignService = {
   // Get all campaigns for analytics
   async getAll() {
+    console.log('\n========== Getting All Campaigns ==========');
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Session exists:', !!session);
+    console.log('User ID:', session?.user?.id || 'NOT LOGGED IN');
+    
+    if (!session) {
+      console.warn('⚠️  No session - returning empty array');
+      return [];
+    }
+    
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Get all campaigns error:', error);
+      throw error;
+    }
+    
+    console.log('Campaigns found:', data?.length || 0);
+    console.log('============================================\n');
     return data || [];
   },
 
   // Get active campaign (running or paused)
   async getActive() {
+    console.log('\n========== Getting Active Campaign ==========');
+    console.log('Checking auth session...');
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Session exists:', !!session);
+    console.log('User ID:', session?.user?.id || 'NOT LOGGED IN');
+    
+    if (!session) {
+      console.warn('⚠️  No active session - user not logged in');
+      return null;
+    }
+    
+    console.log('Querying campaigns table...');
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
       .in('status', ['running', 'paused'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
     
-    if (error && error.code !== 'PGRST116') throw error;
+    if (error) {
+      console.error('❌ Campaign query error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      if (error.code !== 'PGRST116') throw error;
+    }
+    
+    console.log('Campaign found:', !!data);
+    if (data) console.log('Campaign ID:', data.id);
+    console.log('============================================\n');
+    
     return data;
   },
 
