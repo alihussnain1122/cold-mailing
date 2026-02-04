@@ -47,6 +47,7 @@ export const CSV_COLUMN_MAPPINGS = {
 
 /**
  * Replace all personalization variables in text with contact data
+ * Handles missing data gracefully with smart fallbacks
  * @param {string} text - Template text with {{variables}}
  * @param {object} contact - Contact object with data
  * @returns {string} - Text with variables replaced
@@ -63,14 +64,20 @@ export function replaceVariables(text, contact) {
   });
   const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
   
-  // Build replacement map
+  // Extract name parts
+  const firstName = contact.firstName || contact.first_name || extractFirstName(contact.name) || '';
+  const lastName = contact.lastName || contact.last_name || extractLastName(contact.name) || '';
+  const fullName = contact.name || `${firstName} ${lastName}`.trim() || '';
+  const company = contact.company || contact.companyName || contact.company_name || '';
+  
+  // Build replacement map with smart fallbacks for missing data
   const replacements = {
-    firstName: contact.firstName || contact.first_name || extractFirstName(contact.name) || '',
-    lastName: contact.lastName || contact.last_name || extractLastName(contact.name) || '',
-    name: contact.name || `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || '',
+    firstName: firstName || 'there',  // "Hi there" instead of "Hi "
+    lastName: lastName,
+    name: fullName || 'there',  // "Hi there" instead of "Hi "
     email: contact.email || '',
-    company: contact.company || contact.companyName || contact.company_name || '',
-    companyName: contact.company || contact.companyName || contact.company_name || '',
+    company: company,
+    companyName: company,
     website: contact.website || '',
     custom1: contact.custom1 || '',
     custom2: contact.custom2 || '',
@@ -86,6 +93,22 @@ export function replaceVariables(text, contact) {
     const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
     result = result.replace(regex, value);
   }
+  
+  // Clean up common issues with missing data
+  // Remove double spaces
+  result = result.replace(/  +/g, ' ');
+  
+  // Fix "Hi ," or "Hello ," patterns (greeting followed by comma with nothing between)
+  result = result.replace(/\b(Hi|Hello|Hey|Dear)\s*,/gi, '$1 there,');
+  
+  // Fix "at " or "from " with nothing after (company was empty)
+  result = result.replace(/\b(at|from|with)\s+([.,!?\s])/gi, '$2');
+  
+  // Fix double punctuation
+  result = result.replace(/([.,!?])\s*([.,!?])/g, '$1');
+  
+  // Trim lines with only whitespace
+  result = result.split('\n').map(line => line.trimEnd()).join('\n');
   
   return result;
 }
