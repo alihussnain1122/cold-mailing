@@ -1,9 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle, Activity, Cloud } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Play, Square, Send, Clock, CheckCircle, XCircle, Mail, RefreshCw, PlayCircle, Activity, Cloud, Bell, BellOff, Timer } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, PageLoader } from '../components/UI';
 import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { sendAPI } from '../services/api';
 import { useCampaign } from '../context/CampaignContext';
+import { 
+  detectUsedVariables, 
+  getNotificationPermission, 
+  requestNotificationPermission,
+  SUPPORTED_VARIABLES,
+} from '../utils';
 
 export default function SendEmails() {
   const [templates, setTemplates] = useState([]);
@@ -22,9 +28,55 @@ export default function SendEmails() {
   
   const [testEmail, setTestEmail] = useState('');
   const [testTemplateIndex, setTestTemplateIndex] = useState(0);
+  const [notificationPermission, setNotificationPermission] = useState('default');
 
   // Use campaign context
   const campaign = useCampaign();
+
+  // Check notification permission on mount
+  useEffect(() => {
+    setNotificationPermission(getNotificationPermission());
+  }, []);
+
+  // Calculate estimated completion time
+  const estimatedCompletion = useMemo(() => {
+    const remaining = selectedContacts.length - (campaign.sent || 0);
+    if (remaining <= 0) return null;
+    
+    const avgDelaySeconds = (delayMin + delayMax) / 2;
+    const totalSeconds = remaining * avgDelaySeconds;
+    
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  }, [selectedContacts.length, campaign.sent, delayMin, delayMax]);
+
+  // Detect which personalization variables are used in selected templates
+  const usedVariables = useMemo(() => {
+    if (selectedTemplates.length === 0 || templates.length === 0) return [];
+    
+    const allVariables = new Set();
+    selectedTemplates.forEach(index => {
+      const template = templates[index];
+      if (template) {
+        const varsInSubject = detectUsedVariables(template.subject);
+        const varsInBody = detectUsedVariables(template.body);
+        varsInSubject.forEach(v => allVariables.add(v));
+        varsInBody.forEach(v => allVariables.add(v));
+      }
+    });
+    return Array.from(allVariables);
+  }, [selectedTemplates, templates]);
+
+  // Handle notification permission request
+  async function handleEnableNotifications() {
+    const permission = await requestNotificationPermission();
+    setNotificationPermission(permission);
+  }
 
   // Initial data load - runs once on mount
   const loadData = useCallback(async (isRefresh = false) => {
@@ -272,6 +324,54 @@ export default function SendEmails() {
                   {selectedContacts.length === contacts.length ? 'Deselect All' : 'Select All'}
                 </Button>
               </div>
+              
+              {/* Personalization Variables Info */}
+              {usedVariables.length > 0 && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+                  <p className="text-sm font-medium text-purple-900 mb-1">
+                    📝 Personalization Variables Detected
+                  </p>
+                  <p className="text-xs text-purple-700">
+                    Using: {usedVariables.map(v => `{{${v}}}`).join(', ')}
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">
+                    Make sure your contacts have these fields in their CSV data.
+                  </p>
+                </div>
+              )}
+              
+              {/* Estimated Time Preview */}
+              {selectedContacts.length > 0 && !campaign.isRunning && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <Timer className="w-4 h-4 text-gray-500" />
+                    <span>
+                      Estimated time: <strong>{estimatedCompletion}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Browser Notifications Toggle */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3 mb-3">
+                <div className="flex items-center gap-2">
+                  {notificationPermission === 'granted' ? (
+                    <Bell className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <BellOff className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span className="text-sm text-gray-700">Browser Notifications</span>
+                </div>
+                {notificationPermission === 'granted' ? (
+                  <Badge variant="success">Enabled</Badge>
+                ) : notificationPermission === 'denied' ? (
+                  <Badge variant="error">Blocked</Badge>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={handleEnableNotifications}>
+                    Enable
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -437,6 +537,25 @@ export default function SendEmails() {
               <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded-lg p-3">
                 <Clock className="w-4 h-4 animate-pulse" aria-hidden="true" />
                 <span className="font-medium">Next email in {campaign.nextEmailIn} seconds</span>
+              </div>
+            )}
+
+            {/* Estimated Completion Time */}
+            {campaign.isRunning && campaign.total > campaign.sent && (
+              <div className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 rounded-lg p-3">
+                <Timer className="w-4 h-4" aria-hidden="true" />
+                <span className="font-medium">
+                  Estimated completion: {(() => {
+                    const remaining = campaign.total - campaign.sent;
+                    const avgDelaySeconds = (delayMin + delayMax) / 2;
+                    const totalSeconds = remaining * avgDelaySeconds;
+                    const hours = Math.floor(totalSeconds / 3600);
+                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                    if (hours > 0) return `${hours}h ${minutes}m`;
+                    if (minutes > 0) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+                    return 'Less than a minute';
+                  })()}
+                </span>
               </div>
             )}
 

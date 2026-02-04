@@ -3,6 +3,14 @@ import { sendAPI } from '../services/api';
 import { campaignService, unsubscribedService } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import TimerWorker from '../workers/timerWorker.js?worker';
+import { 
+  replaceVariables,
+  notifyCampaignStarted,
+  notifyCampaignCompleted,
+  notifyCampaignError,
+  notifyCampaignPaused,
+  requestNotificationPermission,
+} from '../utils';
 
 const CampaignContext = createContext();
 
@@ -359,6 +367,9 @@ export const CampaignProvider = ({ children }) => {
       log('Campaign completed');
       await campaignService.updateStatus(campaignId, 'completed');
       
+      // Send browser notification for completion
+      notifyCampaignCompleted(currentSent, currentFailed);
+      
       setCampaignState(prev => ({
         ...prev,
         isRunning: false,
@@ -369,6 +380,10 @@ export const CampaignProvider = ({ children }) => {
 
     } catch (err) {
       log('Campaign execution error:', err);
+      
+      // Send browser notification for error
+      notifyCampaignError(err.message);
+      
       await campaignService.updateStatus(campaignId, 'error', {
         error_message: err.message,
       });
@@ -408,18 +423,34 @@ export const CampaignProvider = ({ children }) => {
       return;
     }
 
+    // Request notification permission at campaign start
+    requestNotificationPermission();
+
     try {
-      // Create campaign in Supabase
-      const campaign = await campaignService.create(contacts, config);
+      // Apply personalization to each contact's template
+      const personalizedContacts = contacts.map(contact => ({
+        ...contact,
+        template: {
+          ...contact.template,
+          subject: replaceVariables(contact.template.subject, contact),
+          body: replaceVariables(contact.template.body, contact),
+        },
+      }));
+
+      // Create campaign in Supabase with personalized templates
+      const campaign = await campaignService.create(personalizedContacts, config);
       
       log('Campaign created:', campaign.id);
+
+      // Send browser notification
+      notifyCampaignStarted(personalizedContacts.length);
 
       setCampaignState({
         campaignId: campaign.id,
         isRunning: true,
         currentEmail: '',
         progress: 0,
-        total: contacts.length,
+        total: personalizedContacts.length,
         sent: 0,
         failed: 0,
         status: 'running',
@@ -497,6 +528,10 @@ export const CampaignProvider = ({ children }) => {
   const stopCampaign = useCallback(async () => {
     log('Stopping campaign...');
     stopRef.current = true;
+    
+    // Send pause notification
+    const currentState = campaignState;
+    notifyCampaignPaused(currentState.sent, currentState.total);
     
     // If we're not executing, we need to update Supabase directly
     if (!executingRef.current && campaignState.campaignId) {

@@ -133,12 +133,33 @@ export const contactsService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Filter out duplicates and format
-    const records = contacts.map(c => ({
-      user_id: user.id,
-      email: typeof c === 'string' ? c : c.email,
-      name: typeof c === 'string' ? null : c.name,
-    }));
+    // Handle both simple strings and objects with personalization fields
+    const records = contacts.map(c => {
+      if (typeof c === 'string') {
+        return {
+          user_id: user.id,
+          email: c,
+          name: null,
+        };
+      }
+      
+      // Build full name from firstName/lastName if not provided
+      const fullName = c.name || 
+        (c.firstName ? `${c.firstName}${c.lastName ? ' ' + c.lastName : ''}` : null);
+      
+      return {
+        user_id: user.id,
+        email: c.email,
+        name: fullName,
+        first_name: c.firstName || null,
+        last_name: c.lastName || null,
+        company: c.company || null,
+        website: c.website || null,
+        custom1: c.custom1 || null,
+        custom2: c.custom2 || null,
+        custom3: c.custom3 || null,
+      };
+    });
 
     const { data, error } = await supabase
       .from('contacts')

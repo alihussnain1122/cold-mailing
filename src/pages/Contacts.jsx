@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight, User, Building } from 'lucide-react';
 import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
 import { contactsService } from '../services/supabase';
-import { useDebounce } from '../utils';
+import { useDebounce, parseContactsCSV } from '../utils';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -138,20 +138,24 @@ export default function Contacts() {
 
     try {
       const text = await file.text();
-      const lines = text.split(/[\n\r]+/).filter(line => line.trim());
-      // Skip header if it looks like one
-      const startIndex = lines[0]?.toLowerCase().includes('email') ? 1 : 0;
-      const emails = lines.slice(startIndex)
-        .map(line => line.split(',')[0].trim().replace(/"/g, ''))
-        .filter(email => email && email.includes('@'));
       
-      if (emails.length === 0) {
-        throw new Error('No valid emails found in CSV');
+      // Use personalization-aware CSV parser
+      const { contacts: parsedContacts, fields } = parseContactsCSV(text);
+      
+      if (parsedContacts.length === 0) {
+        throw new Error('No valid contacts found in CSV');
       }
 
-      await contactsService.bulkAdd(emails);
+      await contactsService.bulkAdd(parsedContacts);
       await loadContacts();
-      setSuccess(`Uploaded ${emails.length} contacts`);
+      
+      // Show which personalization fields were detected
+      const personalizationFields = fields.filter(f => f !== 'email');
+      let successMessage = `Uploaded ${parsedContacts.length} contacts`;
+      if (personalizationFields.length > 0) {
+        successMessage += ` with personalization fields: ${personalizationFields.join(', ')}`;
+      }
+      setSuccess(successMessage);
     } catch (err) {
       setError(err.message || 'Failed to upload contacts');
     } finally {
@@ -238,22 +242,39 @@ export default function Contacts() {
           </div>
         ) : (
           <>
-            <div className="overflow-hidden">
-              <table className="w-full" role="table">
+            <div className="overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-150" role="table">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">#</th>
                     <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">Email Address</th>
+                    <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
+                    <th scope="col" className="text-left py-3 px-4 text-sm font-medium text-gray-500">Company</th>
                     <th scope="col" className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedContacts.map((contact, index) => {
                     const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+                    const displayName = contact.firstName 
+                      ? `${contact.firstName}${contact.lastName ? ' ' + contact.lastName : ''}`
+                      : contact.name || '-';
                     return (
                       <tr key={contact.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-sm text-gray-400">{globalIndex}</td>
                         <td className="py-3 px-4 text-sm text-gray-900">{contact.email}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-1.5">
+                            {displayName !== '-' && <User className="w-3.5 h-3.5 text-gray-400" />}
+                            <span>{displayName}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-1.5">
+                            {contact.company && <Building className="w-3.5 h-3.5 text-gray-400" />}
+                            <span>{contact.company || '-'}</span>
+                          </div>
+                        </td>
                         <td className="py-3 px-4 text-right">
                           <button
                             onClick={() => setDeleteConfirm({ open: true, id: contact.id, email: contact.email })}
