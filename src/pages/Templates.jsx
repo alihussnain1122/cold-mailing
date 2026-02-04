@@ -224,8 +224,8 @@ export default function Templates() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Email Templates</h2>
-          <p className="text-gray-500 mt-1">Create and manage your email templates</p>
+          <h2 className="text-2xl font-bold text-stone-900">Email Templates</h2>
+          <p className="text-stone-500 mt-1">Create and manage your email templates</p>
         </div>
         <div className="flex gap-3">
           <input 
@@ -258,28 +258,28 @@ export default function Templates() {
 
       {/* Format Help Card */}
       <Card>
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <div className="bg-blue-100 rounded-full p-2 mt-0.5">
-              <Upload className="w-5 h-5 text-blue-600" />
+            <div className="bg-stone-200 rounded-full p-2 mt-0.5">
+              <Upload className="w-5 h-5 text-stone-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-1">Easy Template Import</h3>
-              <p className="text-sm text-gray-700 mb-2">
+              <h3 className="font-semibold text-stone-900 mb-1">Easy Template Import</h3>
+              <p className="text-sm text-stone-700 mb-2">
                 Upload templates using <strong>CSV</strong> (Excel/Sheets) or JSON format
               </p>
-              <details className="text-sm text-gray-600">
-                <summary className="cursor-pointer hover:text-blue-600 font-medium mb-2">
+              <details className="text-sm text-stone-600">
+                <summary className="cursor-pointer hover:text-stone-900 font-medium mb-2">
                   📋 Click to see CSV format example
                 </summary>
-                <div className="mt-2 pl-4 border-l-2 border-blue-200 space-y-2">
+                <div className="mt-2 pl-4 border-l-2 border-stone-200 space-y-2">
                   <p><strong>Required columns:</strong> subject, body</p>
                   <p><strong>Optional column:</strong> name (for your reference)</p>
                   <div className="bg-white rounded p-2 font-mono text-xs overflow-x-auto">
                     <div>name,subject,body</div>
                     <div>Welcome,Welcome to Our Service!,"Hi!\n\nWelcome to our platform.\n\nBest regards"</div>
                   </div>
-                  <p className="text-xs">💡 Use <code className="bg-blue-100 px-1 rounded">\n</code> for line breaks</p>
+                  <p className="text-xs">💡 Use <code className="bg-stone-100 px-1 rounded">\n</code> for line breaks</p>
                   <p className="text-xs">💡 Open CSV in Excel or Google Sheets to edit easily</p>
                 </div>
               </details>
@@ -291,41 +291,41 @@ export default function Templates() {
       {templates.length === 0 ? (
         <Card>
           <div className="text-center py-12">
-            <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Plus className="w-8 h-8 text-gray-400" aria-hidden="true" />
+            <div className="bg-stone-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Plus className="w-8 h-8 text-stone-400" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No templates yet</h3>
-            <p className="text-gray-500 mb-4">Create your first email template to get started</p>
+            <h3 className="text-lg font-medium text-stone-900 mb-2">No templates yet</h3>
+            <p className="text-stone-500 mb-4">Create your first email template to get started</p>
             <Button onClick={openAddModal}>Create Template</Button>
           </div>
         </Card>
       ) : (
         <div className="grid gap-4" role="list" aria-label="Email templates">
           {templates.map((template) => (
-            <Card key={template.id} className="hover:shadow-md transition-shadow" role="listitem">
+            <Card key={template.id} role="listitem">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-gray-400">{template.name || 'Untitled'}</span>
-                    <h3 className="text-lg font-semibold text-gray-900 truncate">
+                    <span className="text-xs font-medium text-stone-400">{template.name || 'Untitled'}</span>
+                    <h3 className="text-lg font-semibold text-stone-900 truncate">
                       {template.subject}
                     </h3>
                   </div>
-                  <p className="text-gray-500 text-sm line-clamp-2">
+                  <p className="text-stone-500 text-sm line-clamp-2">
                     {template.body.substring(0, 200)}...
                   </p>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
                     onClick={() => setPreviewTemplate(template)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
                     aria-label={`Preview template: ${template.subject}`}
                   >
                     <Eye className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <button
                     onClick={() => openEditModal(template)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
                     aria-label={`Edit template: ${template.subject}`}
                   >
                     <Edit className="w-5 h-5" aria-hidden="true" />
@@ -333,7 +333,7 @@ export default function Templates() {
                   <button
                     onClick={() => setDeleteConfirm({ open: true, id: template.id })}
                     disabled={deleting === template.id}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                     aria-label={`Delete template: ${template.subject}`}
                   >
                     <Trash2 className="w-5 h-5" aria-hidden="true" />
@@ -395,13 +395,13 @@ export default function Templates() {
         {previewTemplate && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">Subject</label>
-              <p className="text-lg font-medium text-gray-900">{previewTemplate.subject}</p>
+              <label className="block text-sm font-medium text-stone-500 mb-1">Subject</label>
+              <p className="text-lg font-medium text-stone-900">{previewTemplate.subject}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">Body</label>
+              <label className="block text-sm font-medium text-stone-500 mb-1">Body</label>
               <div 
-                className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none"
+                className="bg-stone-50 rounded-lg p-4 prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ 
                   __html: sanitizeAndFormat(previewTemplate.body)
                 }}

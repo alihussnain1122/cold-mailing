@@ -83,7 +83,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
       <div className="flex min-h-full items-center justify-center p-4">
         {/* Backdrop */}
         <div 
-          className="fixed inset-0 bg-black/50 transition-opacity" 
+          className="fixed inset-0 bg-stone-900/40 transition-opacity" 
           onClick={onClose}
           aria-hidden="true"
         />
@@ -91,14 +91,14 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
         {/* Modal */}
         <div 
           ref={modalRef}
-          className={`relative bg-white rounded-xl shadow-xl w-full ${sizes[size]} transform transition-all`}
+          className={`relative bg-white rounded-xl shadow-xl w-full ${sizes[size]} transform transition-all border border-stone-200`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 id="modal-title" className="text-lg font-semibold text-gray-900">{title}</h3>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
+            <h3 id="modal-title" className="text-base font-semibold text-stone-900">{title}</h3>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" aria-hidden="true" />

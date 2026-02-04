@@ -71,7 +71,7 @@ const ONBOARDING_STEPS = [
     path: '/send',
     checkComplete: async () => {
       // Check localStorage for test email sent flag
-      return localStorage.getItem('mailflow_test_email_sent') === 'true';
+      return localStorage.getItem('sendium_test_email_sent') === 'true';
     },
   },
   {
@@ -82,14 +82,14 @@ const ONBOARDING_STEPS = [
     path: '/send',
     checkComplete: async () => {
       // Check localStorage for first campaign flag
-      return localStorage.getItem('mailflow_first_campaign_sent') === 'true';
+      return localStorage.getItem('sendium_first_campaign_sent') === 'true';
     },
   },
 ];
 
 // Storage keys
-const ONBOARDING_DISMISSED_KEY = 'mailflow_onboarding_dismissed';
-const ONBOARDING_COMPLETED_KEY = 'mailflow_onboarding_completed';
+const ONBOARDING_DISMISSED_KEY = 'sendium_onboarding_dismissed';
+const ONBOARDING_COMPLETED_KEY = 'sendium_onboarding_completed';
 
 export default function OnboardingWizard({ compact = false }) {
   const navigate = useNavigate();
@@ -146,8 +146,8 @@ export default function OnboardingWizard({ compact = false }) {
   function handleReset() {
     localStorage.removeItem(ONBOARDING_DISMISSED_KEY);
     localStorage.removeItem(ONBOARDING_COMPLETED_KEY);
-    localStorage.removeItem('mailflow_test_email_sent');
-    localStorage.removeItem('mailflow_first_campaign_sent');
+    localStorage.removeItem('sendium_test_email_sent');
+    localStorage.removeItem('sendium_first_campaign_sent');
     setDismissed(false);
     setAllCompleted(false);
     checkOnboardingStatus();
@@ -177,8 +177,8 @@ export default function OnboardingWizard({ compact = false }) {
   if (compact) {
     if (allCompleted) {
       return (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
             <CheckCircle className="w-4 h-4" />
             Setup Complete!
           </div>
@@ -190,7 +190,7 @@ export default function OnboardingWizard({ compact = false }) {
       return (
         <button
           onClick={handleReset}
-          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+          className="w-full p-3 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-600 hover:bg-stone-100 transition-colors"
         >
           Resume Setup Guide
         </button>
@@ -198,21 +198,21 @@ export default function OnboardingWizard({ compact = false }) {
     }
 
     return (
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-blue-800">Getting Started</span>
-          <Badge variant="info" size="xs">{completedCount}/{steps.length}</Badge>
+          <span className="text-xs font-semibold text-stone-700">Getting Started</span>
+          <Badge variant="default" size="xs">{completedCount}/{steps.length}</Badge>
         </div>
-        <div className="w-full h-1.5 bg-blue-200 rounded-full overflow-hidden mb-2">
+        <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden mb-2">
           <div 
-            className="h-full bg-blue-600 transition-all duration-300"
+            className="h-full bg-stone-700 transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
         {nextStep && (
           <button
             onClick={() => handleStepClick(nextStep)}
-            className="w-full flex items-center justify-between text-sm text-blue-700 hover:text-blue-800"
+            className="w-full flex items-center justify-between text-sm text-stone-700 hover:text-stone-900"
           >
             <span className="flex items-center gap-1.5">
               <nextStep.icon className="w-3.5 h-3.5" />
@@ -227,11 +227,11 @@ export default function OnboardingWizard({ compact = false }) {
 
   // Full onboarding panel
   return (
-    <div className="bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 relative">
+    <div className="bg-stone-50 border border-stone-200 rounded-xl p-6 relative">
       {/* Dismiss Button */}
       <button
         onClick={handleDismiss}
-        className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg transition-colors"
+        className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-600 hover:bg-white rounded-lg transition-colors"
         aria-label="Dismiss onboarding"
       >
         <X className="w-5 h-5" />
@@ -239,12 +239,12 @@ export default function OnboardingWizard({ compact = false }) {
 
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 bg-blue-100 rounded-xl">
-          <Mail className="w-8 h-8 text-blue-600" />
+        <div className="p-3 bg-stone-200 rounded-lg">
+          <Mail className="w-6 h-6 text-stone-700" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Welcome to MailFlow! 🚀</h3>
-          <p className="text-sm text-gray-600">
+          <h3 className="text-base font-semibold text-stone-900">Welcome to Sendium</h3>
+          <p className="text-sm text-stone-500">
             Complete these steps to start sending emails
           </p>
         </div>
@@ -253,12 +253,12 @@ export default function OnboardingWizard({ compact = false }) {
       {/* Progress Bar */}
       <div className="mb-6">
         <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-600">Progress</span>
-          <span className="font-medium text-blue-600">{completedCount} of {steps.length} completed</span>
+          <span className="text-stone-600">Progress</span>
+          <span className="font-medium text-stone-700">{completedCount} of {steps.length} completed</span>
         </div>
-        <div className="w-full h-2 bg-blue-200 rounded-full overflow-hidden">
+        <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-blue-600 transition-all duration-500"
+            className="h-full bg-stone-700 transition-all duration-500"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -275,26 +275,26 @@ export default function OnboardingWizard({ compact = false }) {
               key={step.id}
               onClick={() => handleStepClick(step)}
               disabled={step.completed}
-              className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all text-left ${
+              className={`w-full flex items-center gap-4 p-4 rounded-lg transition-all text-left ${
                 step.completed 
-                  ? 'bg-green-50 border border-green-200' 
+                  ? 'bg-emerald-50 border border-emerald-200' 
                   : isNext
-                    ? 'bg-white border-2 border-blue-400 shadow-md'
-                    : 'bg-white border border-gray-200 hover:border-gray-300'
+                    ? 'bg-white border-2 border-stone-400'
+                    : 'bg-white border border-stone-200 hover:border-stone-300'
               }`}
             >
               {/* Step Number/Check */}
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                 step.completed 
-                  ? 'bg-green-100 text-green-600' 
+                  ? 'bg-emerald-100 text-emerald-600' 
                   : isNext
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'bg-gray-100 text-gray-400'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-stone-100 text-stone-400'
               }`}>
                 {step.completed ? (
                   <CheckCircle className="w-5 h-5" />
                 ) : (
-                  <span className="font-semibold">{index + 1}</span>
+                  <span className="font-semibold text-sm">{index + 1}</span>
                 )}
               </div>
 
@@ -302,21 +302,21 @@ export default function OnboardingWizard({ compact = false }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <StepIcon className={`w-4 h-4 ${
-                    step.completed ? 'text-green-600' : 
-                    isNext ? 'text-blue-600' : 'text-gray-400'
+                    step.completed ? 'text-emerald-600' : 
+                    isNext ? 'text-stone-700' : 'text-stone-400'
                   }`} />
                   <span className={`font-medium ${
-                    step.completed ? 'text-green-700' : 
-                    isNext ? 'text-gray-900' : 'text-gray-600'
+                    step.completed ? 'text-emerald-700' : 
+                    isNext ? 'text-stone-900' : 'text-stone-600'
                   }`}>
                     {step.title}
                   </span>
                   {isNext && (
-                    <Badge variant="info" size="sm">Next</Badge>
+                    <Badge variant="default" size="sm">Next</Badge>
                   )}
                 </div>
                 <p className={`text-sm mt-0.5 ${
-                  step.completed ? 'text-green-600' : 'text-gray-500'
+                  step.completed ? 'text-emerald-600' : 'text-stone-500'
                 }`}>
                   {step.completed ? 'Completed ✓' : step.description}
                 </p>
@@ -325,7 +325,7 @@ export default function OnboardingWizard({ compact = false }) {
               {/* Arrow */}
               {!step.completed && (
                 <ArrowRight className={`w-5 h-5 shrink-0 ${
-                  isNext ? 'text-blue-600' : 'text-gray-300'
+                  isNext ? 'text-stone-600' : 'text-stone-300'
                 }`} />
               )}
             </button>
@@ -337,7 +337,7 @@ export default function OnboardingWizard({ compact = false }) {
       <div className="mt-4 text-center">
         <button
           onClick={handleDismiss}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-stone-500 hover:text-stone-700"
         >
           Skip setup guide
         </button>

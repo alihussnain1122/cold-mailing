@@ -2,7 +2,7 @@
 // Credentials never leave the user's device except when sending emails
 // Uses basic encoding to prevent casual inspection (not secure against determined attackers)
 
-const STORAGE_KEY = 'mailflow_smtp_credentials';
+const STORAGE_KEY = 'sendium_smtp_credentials';
 const ENCODING_KEY = 'mf_v1_'; // Version prefix for future migration
 
 // Simple encoding to prevent casual inspection (base64 + reversal)

@@ -10,7 +10,7 @@ import { LoadingSpinner } from './components/UI';
 
 function AppLayout({ children }) {
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-stone-50">
       <Header />
       <div className="flex">
         <Sidebar />
@@ -28,7 +28,7 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-100 via-white to-purple-100">
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
         <LoadingSpinner size="lg" />
       </div>
     );

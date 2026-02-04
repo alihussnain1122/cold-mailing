@@ -3,18 +3,18 @@ import { AlertCircle, CheckCircle, Info, XCircle } from 'lucide-react';
 export default function Alert({ type = 'info', message, className = '' }) {
   const styles = {
     info: {
-      bg: 'bg-blue-50 border-blue-200',
-      text: 'text-blue-800',
+      bg: 'bg-sky-50 border-sky-200',
+      text: 'text-sky-800',
       icon: Info,
     },
     success: {
-      bg: 'bg-green-50 border-green-200',
-      text: 'text-green-800',
+      bg: 'bg-emerald-50 border-emerald-200',
+      text: 'text-emerald-800',
       icon: CheckCircle,
     },
     warning: {
-      bg: 'bg-yellow-50 border-yellow-200',
-      text: 'text-yellow-800',
+      bg: 'bg-amber-50 border-amber-200',
+      text: 'text-amber-800',
       icon: AlertCircle,
     },
     error: {

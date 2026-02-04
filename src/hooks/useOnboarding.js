@@ -6,30 +6,30 @@
 // Mark test email step as complete
 export function useMarkTestEmailSent() {
   return () => {
-    localStorage.setItem('mailflow_test_email_sent', 'true');
+    localStorage.setItem('sendium_test_email_sent', 'true');
   };
 }
 
 // Mark first campaign step as complete
 export function useMarkFirstCampaignSent() {
   return () => {
-    localStorage.setItem('mailflow_first_campaign_sent', 'true');
+    localStorage.setItem('sendium_first_campaign_sent', 'true');
   };
 }
 
 // Check if onboarding is complete
 export function useIsOnboardingComplete() {
   return () => {
-    return localStorage.getItem('mailflow_onboarding_completed') === 'true';
+    return localStorage.getItem('sendium_onboarding_completed') === 'true';
   };
 }
 
 // Reset onboarding progress
 export function useResetOnboarding() {
   return () => {
-    localStorage.removeItem('mailflow_onboarding_dismissed');
-    localStorage.removeItem('mailflow_onboarding_completed');
-    localStorage.removeItem('mailflow_test_email_sent');
-    localStorage.removeItem('mailflow_first_campaign_sent');
+    localStorage.removeItem('sendium_onboarding_dismissed');
+    localStorage.removeItem('sendium_onboarding_completed');
+    localStorage.removeItem('sendium_test_email_sent');
+    localStorage.removeItem('sendium_first_campaign_sent');
   };
 }
