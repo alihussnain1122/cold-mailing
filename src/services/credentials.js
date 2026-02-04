@@ -22,11 +22,8 @@ function decode(str) {
     const encoded = str.slice(ENCODING_KEY.length);
     const reversed = atob(encoded).split('').reverse().join('');
     const decoded = decodeURIComponent(reversed);
-    console.log('[Credentials] Decode successful'); // Debug log
     return decoded;
   } catch (error) {
-    console.error('[Credentials] Decode failed:', error.message);
-    // If decode fails, it means password is corrupted - return empty to force re-entry
     return '';
   }
 }
@@ -86,14 +83,10 @@ export function getCredentialsForRequest() {
   const creds = getCredentials();
   if (!creds) return null;
   
-  // Ensure password is decoded (double-check)
   const password = creds.emailPass;
   if (!password) {
-    console.error('[Credentials] Password is empty after decode - credentials may be corrupted');
     return null;
   }
-  
-  console.log('[Credentials] Sending credentials to API (password length:', password.length, ')');
   
   return {
     smtpHost: creds.smtpHost,

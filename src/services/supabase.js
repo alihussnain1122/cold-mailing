@@ -269,13 +269,9 @@ export const smtpService = {
 export const campaignService = {
   // Get all campaigns for analytics
   async getAll() {
-    console.log('\n========== Getting All Campaigns ==========');
-    const { data: { session } } = await supabase.auth.getSession();
-    console.log('Session exists:', !!session);
-    console.log('User ID:', session?.user?.id || 'NOT LOGGED IN');
-    
+const { data: { session } } = await supabase.auth.getSession();
+
     if (!session) {
-      console.warn('⚠️  No session - returning empty array');
       return [];
     }
     
@@ -285,12 +281,8 @@ export const campaignService = {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('❌ Get all campaigns error:', error);
       throw error;
     }
-    
-    console.log('Campaigns found:', data?.length || 0);
-    console.log('============================================\n');
     return data || [];
   },
 
