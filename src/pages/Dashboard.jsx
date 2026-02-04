@@ -5,7 +5,7 @@ import {
   PlayCircle, Settings, AlertTriangle, ArrowRight,
   BarChart3, Target
 } from 'lucide-react';
-import { Card, Badge, PageLoader, Button } from '../components/UI';
+import { Card, Badge, PageLoader, Button, OnboardingWizard } from '../components/UI';
 import { templatesService, contactsService, smtpService } from '../services/supabase';
 import { useCampaign } from '../context/CampaignContext';
 
@@ -104,6 +104,9 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Onboarding Wizard - Show for new users */}
+      <OnboardingWizard />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

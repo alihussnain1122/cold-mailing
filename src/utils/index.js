@@ -19,3 +19,11 @@ export {
   notifyCampaignPaused,
   getPermissionLabel,
 } from './notifications';
+export {
+  checkAllDNS,
+  checkSPF,
+  checkDKIM,
+  checkDMARC,
+  checkMX,
+  getProviderInstructions,
+} from './dnsChecker';

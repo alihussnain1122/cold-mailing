@@ -7,3 +7,5 @@ export { default as Modal } from './Modal';
 export { default as Alert } from './Alert';
 export { default as LoadingSpinner, PageLoader } from './LoadingSpinner';
 export { default as ConfirmDialog } from './ConfirmDialog';
+export { default as OnboardingWizard } from './OnboardingWizard';
+export { useMarkTestEmailSent, useMarkFirstCampaignSent } from '../../hooks/useOnboarding';

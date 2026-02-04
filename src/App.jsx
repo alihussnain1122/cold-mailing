@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
-import { Dashboard, Templates, Contacts, SendEmails, Settings, Analytics } from './pages';
+import { Dashboard, Templates, Contacts, SendEmails, Settings, Analytics, Sequences } from './pages';
 import Auth from './pages/Auth';
 import { CampaignProvider } from './context/CampaignContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -58,6 +58,7 @@ function ProtectedRoutes() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/send" element={<SendEmails />} />
+          <Route path="/sequences" element={<Sequences />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/login" element={<Navigate to="/" replace />} />

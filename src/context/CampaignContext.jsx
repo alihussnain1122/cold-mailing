@@ -578,6 +578,45 @@ export const CampaignProvider = ({ children }) => {
     });
   }, [campaignState.campaignId]);
 
+  // Schedule a campaign for later
+  const scheduleCampaign = useCallback(async (contacts, config) => {
+    log('Scheduling campaign for:', config.scheduledAt);
+    
+    if (!contacts || contacts.length === 0) {
+      throw new Error('No contacts to send to');
+    }
+
+    if (!config.scheduledAt) {
+      throw new Error('Scheduled time is required');
+    }
+
+    // Check if contacts have templates
+    const hasTemplates = contacts.every(c => c.template);
+    if (!hasTemplates) {
+      throw new Error('Contacts missing template information');
+    }
+
+    // Apply personalization to each contact's template
+    const personalizedContacts = contacts.map(contact => ({
+      ...contact,
+      template: {
+        ...contact.template,
+        subject: replaceVariables(contact.template.subject, contact),
+        body: replaceVariables(contact.template.body, contact),
+      },
+    }));
+
+    // Create campaign in Supabase with 'scheduled' status
+    const campaign = await campaignService.create(personalizedContacts, {
+      ...config,
+      status: 'scheduled',
+    });
+    
+    log('Campaign scheduled:', campaign.id);
+
+    return campaign;
+  }, []);
+
   // Check if there's a paused campaign that can be resumed
   const canResume = campaignState.status === 'paused' && 
                     campaignState.campaignId !== null && 
@@ -592,6 +631,7 @@ export const CampaignProvider = ({ children }) => {
     stopCampaign,
     resetCampaign,
     resumeCampaign,
+    scheduleCampaign,
     canResume,
     isRunningElsewhere,
   };

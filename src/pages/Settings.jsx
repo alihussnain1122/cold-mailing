@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
 import { smtpService } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { checkAllDNS, getProviderInstructions } from '../utils';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -21,6 +22,12 @@ export default function Settings() {
   const [configured, setConfigured] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [secureConnection, setSecureConnection] = useState(true);
+  
+  // DNS Checker state
+  const [dnsResults, setDnsResults] = useState(null);
+  const [dnsChecking, setDnsChecking] = useState(false);
+  const [dnsError, setDnsError] = useState('');
+  const [showInstructions, setShowInstructions] = useState(null);
 
   useEffect(() => {
     loadConfig();
@@ -102,11 +109,32 @@ export default function Settings() {
         senderName: 'Support Team',
       });
       setConfigured(false);
+      setDnsResults(null);
       setSuccess('Credentials cleared');
     } catch (err) {
       setError('Failed to clear credentials');
     }
     setClearConfirm(false);
+  }
+
+  // DNS Checker function
+  async function handleCheckDNS() {
+    if (!config.emailUser || !config.emailUser.includes('@')) {
+      setDnsError('Please enter a valid email address first');
+      return;
+    }
+    
+    setDnsChecking(true);
+    setDnsError('');
+    
+    try {
+      const results = await checkAllDNS(config.emailUser);
+      setDnsResults(results);
+    } catch (err) {
+      setDnsError('Failed to check DNS records: ' + err.message);
+    } finally {
+      setDnsChecking(false);
+    }
   }
 
   return (
@@ -342,6 +370,171 @@ export default function Settings() {
       </div>
       )}
 
+      {/* DNS Record Checker Section */}
+      {configured && (
+        <Card>
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-purple-100">
+                <Globe className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Email Deliverability Check</h3>
+                <p className="text-sm text-gray-500">
+                  Check SPF, DKIM, and DMARC records for your domain
+                </p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={handleCheckDNS} 
+              loading={dnsChecking}
+              disabled={!config.emailUser}
+            >
+              {dnsChecking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Checking...
+                </>
+              ) : dnsResults ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Re-check
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Check DNS Records
+                </>
+              )}
+            </Button>
+          </div>
+
+          {dnsError && <Alert type="error" message={dnsError} className="mb-4" />}
+
+          {dnsResults && (
+            <div className="space-y-6">
+              {/* Score Overview */}
+              <div className={`p-4 rounded-xl border ${
+                dnsResults.overallStatus === 'excellent' ? 'bg-green-50 border-green-200' :
+                dnsResults.overallStatus === 'good' ? 'bg-blue-50 border-blue-200' :
+                dnsResults.overallStatus === 'fair' ? 'bg-amber-50 border-amber-200' :
+                'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-4xl font-bold ${
+                      dnsResults.overallStatus === 'excellent' ? 'text-green-600' :
+                      dnsResults.overallStatus === 'good' ? 'text-blue-600' :
+                      dnsResults.overallStatus === 'fair' ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      {dnsResults.score}/{dnsResults.maxScore}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">Deliverability Score</div>
+                      <div className="text-sm text-gray-600">Domain: {dnsResults.domain}</div>
+                    </div>
+                  </div>
+                  <Badge 
+                    variant={
+                      dnsResults.overallStatus === 'excellent' ? 'success' :
+                      dnsResults.overallStatus === 'good' ? 'info' :
+                      dnsResults.overallStatus === 'fair' ? 'warning' :
+                      'danger'
+                    }
+                    size="md"
+                  >
+                    {dnsResults.overallStatus.charAt(0).toUpperCase() + dnsResults.overallStatus.slice(1)}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Individual Record Results */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DNSRecordCard 
+                  title="SPF Record"
+                  description="Specifies which servers can send email for your domain"
+                  result={dnsResults.spf}
+                  onShowInstructions={() => setShowInstructions('spf')}
+                />
+                <DNSRecordCard 
+                  title="DKIM Record"
+                  description="Adds a digital signature to verify email authenticity"
+                  result={dnsResults.dkim}
+                  onShowInstructions={() => setShowInstructions('dkim')}
+                />
+                <DNSRecordCard 
+                  title="DMARC Record"
+                  description="Tells receivers what to do with failed emails"
+                  result={dnsResults.dmarc}
+                  onShowInstructions={() => setShowInstructions('dmarc')}
+                />
+                <DNSRecordCard 
+                  title="MX Records"
+                  description="Specifies mail servers for receiving email"
+                  result={dnsResults.mx}
+                  isMX={true}
+                />
+              </div>
+
+              {/* Setup Instructions */}
+              {showInstructions && (
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-gray-900">
+                      Setup Instructions for {showInstructions.toUpperCase()}
+                    </h4>
+                    <button 
+                      onClick={() => setShowInstructions(null)}
+                      className="p-1 hover:bg-gray-200 rounded-lg"
+                    >
+                      <XCircle className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {['gmail', 'zoho', 'outlook'].map(provider => {
+                      const instructions = getProviderInstructions(provider);
+                      return (
+                        <div key={provider} className="p-3 bg-white rounded-lg border">
+                          <div className="font-medium text-gray-900 mb-2">{instructions.name}</div>
+                          <p className="text-sm text-gray-600 font-mono bg-gray-50 p-2 rounded">
+                            {instructions[showInstructions]}
+                          </p>
+                          {instructions.docs && (
+                            <a 
+                              href={instructions.docs}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline flex items-center gap-1 mt-2"
+                            >
+                              View full documentation
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500 text-center">
+                Checked at {new Date(dnsResults.checkedAt).toLocaleString()}
+              </p>
+            </div>
+          )}
+
+          {!dnsResults && !dnsChecking && (
+            <div className="text-center py-8 text-gray-500">
+              <Globe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>Click "Check DNS Records" to verify your email domain configuration</p>
+              <p className="text-sm mt-1">This helps ensure your emails reach recipients' inboxes</p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Clear Credentials Confirmation */}
       <ConfirmDialog
         isOpen={clearConfirm}
@@ -388,6 +581,82 @@ function ProviderInfo({ name, host, port }) {
         <div className="text-xs text-gray-500">{host}</div>
       </div>
       <Badge variant="default" size="xs">Port {port}</Badge>
+    </div>
+  );
+}
+
+// DNS Record Card Component
+function DNSRecordCard({ title, description, result, onShowInstructions, isMX = false }) {
+  const getStatusIcon = () => {
+    if (result.status === 'found' && result.severity === 'success') {
+      return <CheckCircle className="w-5 h-5 text-green-500" />;
+    } else if (result.status === 'found' && result.severity === 'warning') {
+      return <AlertCircle className="w-5 h-5 text-amber-500" />;
+    } else if (result.status === 'missing') {
+      return <XCircle className="w-5 h-5 text-red-500" />;
+    } else {
+      return <XCircle className="w-5 h-5 text-red-500" />;
+    }
+  };
+
+  const getStatusColor = () => {
+    if (result.status === 'found' && result.severity === 'success') return 'border-green-200 bg-green-50';
+    if (result.status === 'found' && result.severity === 'warning') return 'border-amber-200 bg-amber-50';
+    return 'border-red-200 bg-red-50';
+  };
+
+  return (
+    <div className={`p-4 rounded-xl border ${getStatusColor()}`}>
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {getStatusIcon()}
+          <div>
+            <div className="font-semibold text-gray-900">{title}</div>
+            <div className="text-xs text-gray-600">{description}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-3">
+        <div className="text-sm text-gray-700">{result.message}</div>
+        
+        {result.record && !isMX && (
+          <div className="mt-2 p-2 bg-white rounded border text-xs font-mono text-gray-600 break-all max-h-20 overflow-y-auto">
+            {result.record}
+          </div>
+        )}
+        
+        {isMX && result.records && result.records.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {result.records.slice(0, 3).map((mx, i) => (
+              <div key={i} className="p-2 bg-white rounded border text-xs font-mono text-gray-600">
+                Priority {mx.priority}: {mx.exchange}
+              </div>
+            ))}
+            {result.records.length > 3 && (
+              <div className="text-xs text-gray-500">
+                +{result.records.length - 3} more record(s)
+              </div>
+            )}
+          </div>
+        )}
+        
+        {result.status === 'missing' && onShowInstructions && (
+          <button
+            onClick={onShowInstructions}
+            className="mt-3 text-sm text-blue-600 hover:underline flex items-center gap-1"
+          >
+            <Info className="w-4 h-4" />
+            How to fix this
+          </button>
+        )}
+        
+        {result.selector && (
+          <div className="mt-2 text-xs text-gray-500">
+            Selector: {result.selector}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
