@@ -363,16 +363,12 @@ const { data: { session } } = await supabase.auth.getSession();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Determine campaign status and start time
-    const isScheduled = config.status === 'scheduled' || config.scheduledAt;
-    const status = isScheduled ? 'scheduled' : 'running';
-
     // Create the campaign record
     const { data: campaign, error: campaignError } = await supabase
       .from('campaigns')
       .insert({
         user_id: user.id,
-        status: status,
+        status: 'running',
         total_contacts: contacts.length,
         sent_count: 0,
         failed_count: 0,
@@ -380,8 +376,7 @@ const { data: { session } } = await supabase.auth.getSession();
         delay_min: config.delayMin || 10000,
         delay_max: config.delayMax || 90000,
         sender_name: config.senderName || 'Support Team',
-        started_at: isScheduled ? null : new Date().toISOString(),
-        scheduled_at: config.scheduledAt || null,
+        started_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -503,29 +498,6 @@ const { data: { session } } = await supabase.auth.getSession();
       .from('campaigns')
       .delete()
       .eq('id', campaignId);
-    
-    if (error) throw error;
-  },
-
-  // Get scheduled campaigns
-  async getScheduled() {
-    const { data, error } = await supabase
-      .from('campaigns')
-      .select('*')
-      .eq('status', 'scheduled')
-      .order('scheduled_at', { ascending: true });
-    
-    if (error) throw error;
-    return data || [];
-  },
-
-  // Cancel a scheduled campaign
-  async cancelScheduled(campaignId) {
-    const { error } = await supabase
-      .from('campaigns')
-      .delete()
-      .eq('id', campaignId)
-      .eq('status', 'scheduled');
     
     if (error) throw error;
   },
@@ -683,246 +655,4 @@ export const unsubscribedService = {
     }
     return !!data;
   }
-};
-
-// ==================
-// EMAIL SEQUENCES
-// ==================
-export const sequenceService = {
-  // Get all sequences with their steps
-  async getAll() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Get sequences
-    const { data: sequences, error: seqError } = await supabase
-      .from('email_sequences')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (seqError) throw seqError;
-
-    // Get steps for all sequences
-    const sequenceIds = (sequences || []).map(s => s.id);
-    
-    if (sequenceIds.length === 0) {
-      return [];
-    }
-
-    const { data: steps, error: stepsError } = await supabase
-      .from('email_sequence_steps')
-      .select('*')
-      .in('sequence_id', sequenceIds)
-      .order('step_number', { ascending: true });
-    
-    if (stepsError) throw stepsError;
-
-    // Get enrolled contacts count for each sequence
-    const { data: enrollments, error: enrollError } = await supabase
-      .from('contact_sequence_status')
-      .select('sequence_id')
-      .in('sequence_id', sequenceIds)
-      .eq('status', 'active');
-    
-    if (enrollError) throw enrollError;
-
-    // Combine data
-    return (sequences || []).map(seq => ({
-      ...seq,
-      steps: (steps || []).filter(s => s.sequence_id === seq.id),
-      contacts_enrolled: (enrollments || []).filter(e => e.sequence_id === seq.id).length,
-    }));
-  },
-
-  // Get a single sequence with steps
-  async getById(id) {
-    const { data: sequence, error: seqError } = await supabase
-      .from('email_sequences')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (seqError) throw seqError;
-
-    const { data: steps, error: stepsError } = await supabase
-      .from('email_sequence_steps')
-      .select('*')
-      .eq('sequence_id', id)
-      .order('step_number', { ascending: true });
-    
-    if (stepsError) throw stepsError;
-
-    return {
-      ...sequence,
-      steps: steps || [],
-    };
-  },
-
-  // Create a new sequence with steps
-  async create(sequenceData) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Create the sequence
-    const { data: sequence, error: seqError } = await supabase
-      .from('email_sequences')
-      .insert({
-        user_id: user.id,
-        name: sequenceData.name,
-        description: sequenceData.description || null,
-        is_active: true,
-      })
-      .select()
-      .single();
-    
-    if (seqError) throw seqError;
-
-    // Create the steps
-    if (sequenceData.steps && sequenceData.steps.length > 0) {
-      const stepsToInsert = sequenceData.steps.map((step, index) => ({
-        sequence_id: sequence.id,
-        user_id: user.id,
-        step_number: index + 1,
-        subject: step.subject,
-        body: step.body,
-        delay_days: step.delay_days || 0,
-        delay_hours: step.delay_hours || 0,
-        condition: step.condition || 'always',
-      }));
-
-      const { error: stepsError } = await supabase
-        .from('email_sequence_steps')
-        .insert(stepsToInsert);
-      
-      if (stepsError) throw stepsError;
-    }
-
-    return sequence;
-  },
-
-  // Update a sequence and its steps
-  async update(id, sequenceData) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Update the sequence
-    const { error: seqError } = await supabase
-      .from('email_sequences')
-      .update({
-        name: sequenceData.name,
-        description: sequenceData.description || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-    
-    if (seqError) throw seqError;
-
-    // Delete existing steps and recreate
-    const { error: deleteError } = await supabase
-      .from('email_sequence_steps')
-      .delete()
-      .eq('sequence_id', id);
-    
-    if (deleteError) throw deleteError;
-
-    // Create new steps
-    if (sequenceData.steps && sequenceData.steps.length > 0) {
-      const stepsToInsert = sequenceData.steps.map((step, index) => ({
-        sequence_id: id,
-        user_id: user.id,
-        step_number: index + 1,
-        subject: step.subject,
-        body: step.body,
-        delay_days: step.delay_days || 0,
-        delay_hours: step.delay_hours || 0,
-        condition: step.condition || 'always',
-      }));
-
-      const { error: stepsError } = await supabase
-        .from('email_sequence_steps')
-        .insert(stepsToInsert);
-      
-      if (stepsError) throw stepsError;
-    }
-
-    return { id };
-  },
-
-  // Delete a sequence
-  async delete(id) {
-    const { error } = await supabase
-      .from('email_sequences')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-  },
-
-  // Toggle sequence active status
-  async toggleActive(id, isActive) {
-    const { error } = await supabase
-      .from('email_sequences')
-      .update({ is_active: isActive, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    
-    if (error) throw error;
-  },
-
-  // Enroll a contact in a sequence
-  async enrollContact(sequenceId, contactId) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Get first step to calculate next email time
-    const { data: firstStep } = await supabase
-      .from('email_sequence_steps')
-      .select('*')
-      .eq('sequence_id', sequenceId)
-      .eq('step_number', 1)
-      .single();
-
-    const { data, error } = await supabase
-      .from('contact_sequence_status')
-      .insert({
-        user_id: user.id,
-        contact_id: contactId,
-        sequence_id: sequenceId,
-        current_step: 1,
-        status: 'active',
-        next_email_at: new Date().toISOString(), // First email immediately
-      })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
-
-  // Get contacts enrolled in a sequence
-  async getEnrolledContacts(sequenceId) {
-    const { data, error } = await supabase
-      .from('contact_sequence_status')
-      .select(`
-        *,
-        contacts (id, email, name)
-      `)
-      .eq('sequence_id', sequenceId);
-    
-    if (error) throw error;
-    return data || [];
-  },
-
-  // Update contact's sequence progress
-  async updateContactProgress(statusId, updates) {
-    const { error } = await supabase
-      .from('contact_sequence_status')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', statusId);
-    
-    if (error) throw error;
-  },
 };
