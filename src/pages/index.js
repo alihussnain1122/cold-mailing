@@ -4,4 +4,3 @@ export { default as Contacts } from './Contacts';
 export { default as SendEmails } from './SendEmails';
 export { default as Settings } from './Settings';
 export { default as Analytics } from './Analytics';
-export { default as Sequences } from './Sequences';
