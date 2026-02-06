@@ -3,39 +3,66 @@
  * Checks SPF, DKIM, and DMARC records for a domain
  */
 
-// Cloudflare DNS-over-HTTPS endpoint
-const DNS_API = 'https://cloudflare-dns.com/dns-query';
+// DNS-over-HTTPS providers (with fallbacks)
+const DNS_PROVIDERS = [
+  { 
+    name: 'Google',
+    url: 'https://dns.google/resolve',
+    headers: { 'Accept': 'application/dns-json' }
+  },
+  { 
+    name: 'Cloudflare',
+    url: 'https://1.1.1.1/dns-query',
+    headers: { 'Accept': 'application/dns-json' }
+  },
+];
 
 /**
- * Query DNS records using DNS-over-HTTPS
+ * Query DNS records using DNS-over-HTTPS with fallback providers
  * @param {string} domain - Domain to query
  * @param {string} type - Record type (TXT, CNAME, etc.)
  * @returns {Promise<Array>} Array of record values
  */
 async function queryDNS(domain, type = 'TXT') {
-  try {
-    const response = await fetch(`${DNS_API}?name=${encodeURIComponent(domain)}&type=${type}`, {
-      headers: {
-        'Accept': 'application/dns-json',
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`DNS query failed: ${response.status}`);
+  let lastError = null;
+  
+  for (const provider of DNS_PROVIDERS) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
+      const response = await fetch(
+        `${provider.url}?name=${encodeURIComponent(domain)}&type=${type}`,
+        {
+          headers: provider.headers,
+          signal: controller.signal,
+        }
+      );
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`DNS query failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.Status !== 0 && data.Status !== undefined) {
+        // DNS error codes: 3 = NXDOMAIN (not found), 2 = SERVFAIL
+        return [];
+      }
+      
+      return (data.Answer || []).map(record => record.data?.replace(/"/g, '') || '');
+    } catch (error) {
+      console.warn(`DNS query via ${provider.name} failed:`, error.message);
+      lastError = error;
+      // Continue to next provider
     }
-    
-    const data = await response.json();
-    
-    if (data.Status !== 0) {
-      // DNS error codes: 3 = NXDOMAIN (not found), 2 = SERVFAIL
-      return [];
-    }
-    
-    return (data.Answer || []).map(record => record.data?.replace(/"/g, '') || '');
-  } catch (error) {
-    console.error('DNS query error:', error);
-    throw error;
   }
+  
+  // All providers failed
+  console.error('All DNS providers failed:', lastError);
+  throw new Error('DNS lookup failed. Please check your internet connection and try again.');
 }
 
 /**
@@ -231,19 +258,9 @@ export async function checkDMARC(domain) {
  */
 export async function checkMX(domain) {
   try {
-    const response = await fetch(`${DNS_API}?name=${encodeURIComponent(domain)}&type=MX`, {
-      headers: {
-        'Accept': 'application/dns-json',
-      },
-    });
+    const records = await queryDNS(domain, 'MX');
     
-    if (!response.ok) {
-      throw new Error(`DNS query failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.Status !== 0 || !data.Answer || data.Answer.length === 0) {
+    if (!records || records.length === 0) {
       return {
         status: 'missing',
         message: 'No MX records found',
@@ -252,13 +269,12 @@ export async function checkMX(domain) {
       };
     }
     
-    const mxRecords = data.Answer
-      .filter(r => r.type === 15)
+    const mxRecords = records
       .map(r => {
-        const parts = r.data.split(' ');
+        const parts = r.split(' ');
         return {
-          priority: parseInt(parts[0], 10),
-          exchange: parts[1]?.replace(/\.$/, '') || '',
+          priority: parseInt(parts[0], 10) || 0,
+          exchange: parts[1]?.replace(/\.$/, '') || r.replace(/\.$/, ''),
         };
       })
       .sort((a, b) => a.priority - b.priority);
