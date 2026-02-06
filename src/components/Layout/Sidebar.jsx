@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Settings, FileText, Users, Send, LayoutDashboard, BarChart3 } from 'lucide-react';
+import { Settings, FileText, Users, Send, LayoutDashboard, BarChart3, HelpCircle } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const navItems = [
   { path: '/send', label: 'Send Emails', icon: Send },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/help', label: 'Help & Docs', icon: HelpCircle },
 ];
 
 export default function Sidebar() {
