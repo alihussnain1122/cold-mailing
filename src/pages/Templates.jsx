@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Wand2, Loader2 } from 'lucide-react';
-import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
+import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader, DuplicateDialog } from '../components/UI';
 import { templatesService } from '../services/supabase';
 import { aiAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { sanitizeAndFormat } from '../utils';
+import { sanitizeAndFormat, findDuplicateTemplates } from '../utils';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -27,6 +27,14 @@ export default function Templates() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Duplicate detection state
+  const [duplicateDialog, setDuplicateDialog] = useState({
+    open: false,
+    duplicates: [],
+    duplicatesWithExisting: [],
+    uniqueTemplates: [],
+  });
   
   // AI Generation state
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -115,6 +123,15 @@ export default function Templates() {
       return;
     }
 
+    // Check for duplicates when adding new template (not editing)
+    if (!editId) {
+      const duplicateCheck = findDuplicateTemplates([formData], templates);
+      if (duplicateCheck.duplicatesWithExisting.length > 0) {
+        setError('A template with the same subject and body already exists');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       if (editId) {
@@ -186,9 +203,26 @@ export default function Templates() {
         throw new Error('No templates found in file');
       }
       
-      await templatesService.bulkAdd(templatesArray);
+      // Check for duplicates
+      const duplicateCheck = findDuplicateTemplates(templatesArray, templates);
+      
+      // If there are duplicates, show the dialog
+      if (duplicateCheck.totalDuplicates > 0) {
+        setDuplicateDialog({
+          open: true,
+          duplicates: duplicateCheck.duplicates,
+          duplicatesWithExisting: duplicateCheck.duplicatesWithExisting,
+          uniqueTemplates: duplicateCheck.unique,
+        });
+        setUploading(false);
+        e.target.value = '';
+        return;
+      }
+      
+      // No duplicates, add all
+      await templatesService.bulkAdd(duplicateCheck.unique);
       await loadTemplates();
-      setSuccess(`Uploaded ${templatesArray.length} template${templatesArray.length !== 1 ? 's' : ''}`);
+      setSuccess(`Uploaded ${duplicateCheck.unique.length} template${duplicateCheck.unique.length !== 1 ? 's' : ''}`);
     } catch (err) {
       setError(err.message || 'Failed to upload templates');
     } finally {
@@ -196,6 +230,29 @@ export default function Templates() {
     }
     
     e.target.value = '';
+  }
+
+  // Handle confirmed add from duplicate dialog
+  async function handleConfirmAddTemplates() {
+    const { uniqueTemplates } = duplicateDialog;
+    
+    if (uniqueTemplates.length === 0) {
+      setError('No unique templates to add');
+      setDuplicateDialog({ ...duplicateDialog, open: false });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await templatesService.bulkAdd(uniqueTemplates);
+      await loadTemplates();
+      setSuccess(`Added ${uniqueTemplates.length} template${uniqueTemplates.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setDuplicateDialog({ ...duplicateDialog, open: false });
+    }
   }
 
   function parseCSV(text) {
@@ -884,6 +941,18 @@ export default function Templates() {
           )}
         </div>
       </Modal>
+
+      {/* Duplicate Detection Dialog */}
+      <DuplicateDialog
+        isOpen={duplicateDialog.open}
+        onClose={() => setDuplicateDialog({ ...duplicateDialog, open: false })}
+        onConfirm={handleConfirmAddTemplates}
+        type="templates"
+        duplicates={duplicateDialog.duplicates}
+        duplicatesWithExisting={duplicateDialog.duplicatesWithExisting}
+        uniqueCount={duplicateDialog.uniqueTemplates.length}
+        invalidItems={[]}
+      />
     </div>
   );
 }

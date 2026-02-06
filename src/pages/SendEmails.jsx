@@ -19,7 +19,7 @@ import {
 import { Card, Button, Alert, LoadingSpinner } from '../components/UI';
 import { useCampaign } from '../context/CampaignContext';
 import { templatesService, contactsService } from '../services/supabase';
-import { replaceVariables } from '../utils';
+import { replaceVariables, validateContactEmails } from '../utils';
 
 export default function SendEmails() {
   const { 
@@ -105,11 +105,21 @@ export default function SendEmails() {
       return;
     }
 
+    // Validate all emails before sending
+    const validation = validateContactEmails(contacts);
+    
+    if (validation.hasInvalid) {
+      const invalidEmails = validation.invalid.slice(0, 5).map(c => c.email).join(', ');
+      const moreCount = validation.invalid.length > 5 ? ` and ${validation.invalid.length - 5} more` : '';
+      setError(`Found ${validation.invalid.length} invalid email(s): ${invalidEmails}${moreCount}. Please fix or remove them from Contacts before sending.`);
+      return;
+    }
+
     setError('');
     
     try {
       // Attach template to each contact (as the context expects)
-      const contactsWithTemplate = contacts.map(contact => ({
+      const contactsWithTemplate = validation.valid.map(contact => ({
         ...contact,
         template: selectedTemplate,
       }));

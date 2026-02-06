@@ -27,3 +27,10 @@ export {
   checkMX,
   getProviderInstructions,
 } from './dnsChecker';
+export {
+  validateEmail,
+  validateEmails,
+  findDuplicateContacts,
+  findDuplicateTemplates,
+  validateContactEmails,
+} from './validation';

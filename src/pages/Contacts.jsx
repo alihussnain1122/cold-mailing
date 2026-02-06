@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User, Building } from 'lucide-react';
-import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
+import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader, DuplicateDialog } from '../components/UI';
 import { contactsService } from '../services/supabase';
-import { useDebounce, parseContactsCSV } from '../utils';
+import { useDebounce, parseContactsCSV, findDuplicateContacts, validateContactEmails } from '../utils';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -23,6 +23,16 @@ export default function Contacts() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Duplicate detection state
+  const [duplicateDialog, setDuplicateDialog] = useState({
+    open: false,
+    duplicates: [],
+    duplicatesWithExisting: [],
+    uniqueContacts: [],
+    invalidItems: [],
+    fields: [],
+  });
 
   // Debounced search term
   const debouncedSearch = useDebounce(searchTerm, 300);
@@ -76,27 +86,80 @@ export default function Contacts() {
   }, [contacts, debouncedSearch, currentPage]);
 
   async function handleAddEmails() {
-    const emails = newEmails
+    const rawEmails = newEmails
       .split(/[\n,;]/)
       .map(e => e.trim())
-      .filter(e => e && e.includes('@'));
+      .filter(e => e);
 
-    if (emails.length === 0) {
-      setError('Please enter valid email addresses');
+    if (rawEmails.length === 0) {
+      setError('Please enter email addresses');
       return;
     }
 
+    // Validate emails
+    const validation = validateContactEmails(rawEmails);
+    
+    // Find duplicates among valid emails
+    const duplicateCheck = findDuplicateContacts(validation.valid, contacts);
+    
+    const totalIssues = validation.invalid.length + duplicateCheck.totalDuplicates;
+    
+    // If there are issues, show the dialog
+    if (totalIssues > 0) {
+      setDuplicateDialog({
+        open: true,
+        duplicates: duplicateCheck.duplicates,
+        duplicatesWithExisting: duplicateCheck.duplicatesWithExisting,
+        uniqueContacts: duplicateCheck.unique,
+        invalidItems: validation.invalid,
+        fields: [],
+      });
+      return;
+    }
+
+    // No issues, add all
     setSaving(true);
     try {
-      await contactsService.bulkAdd(emails);
+      await contactsService.bulkAdd(duplicateCheck.unique);
       await loadContacts();
-      setSuccess(`Added ${emails.length} contacts`);
+      setSuccess(`Added ${duplicateCheck.unique.length} contacts`);
       setIsModalOpen(false);
       setNewEmails('');
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Handle confirmed add from duplicate dialog
+  async function handleConfirmAddContacts() {
+    const { uniqueContacts, fields } = duplicateDialog;
+    
+    if (uniqueContacts.length === 0) {
+      setError('No valid contacts to add');
+      setDuplicateDialog({ ...duplicateDialog, open: false });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await contactsService.bulkAdd(uniqueContacts);
+      await loadContacts();
+      
+      const personalizationFields = fields.filter(f => f !== 'email');
+      let successMessage = `Added ${uniqueContacts.length} contacts`;
+      if (personalizationFields.length > 0) {
+        successMessage += ` with fields: ${personalizationFields.join(', ')}`;
+      }
+      setSuccess(successMessage);
+      setIsModalOpen(false);
+      setNewEmails('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setDuplicateDialog({ ...duplicateDialog, open: false });
     }
   }
 
@@ -146,12 +209,36 @@ export default function Contacts() {
         throw new Error('No valid contacts found in CSV');
       }
 
-      await contactsService.bulkAdd(parsedContacts);
+      // Validate emails in parsed contacts
+      const validation = validateContactEmails(parsedContacts);
+      
+      // Find duplicates among valid contacts
+      const duplicateCheck = findDuplicateContacts(validation.valid, contacts);
+      
+      const totalIssues = validation.invalid.length + duplicateCheck.totalDuplicates;
+      
+      // If there are issues, show the dialog
+      if (totalIssues > 0) {
+        setDuplicateDialog({
+          open: true,
+          duplicates: duplicateCheck.duplicates,
+          duplicatesWithExisting: duplicateCheck.duplicatesWithExisting,
+          uniqueContacts: duplicateCheck.unique,
+          invalidItems: validation.invalid,
+          fields,
+        });
+        setUploading(false);
+        e.target.value = '';
+        return;
+      }
+
+      // No issues, add all
+      await contactsService.bulkAdd(duplicateCheck.unique);
       await loadContacts();
       
       // Show which personalization fields were detected
       const personalizationFields = fields.filter(f => f !== 'email');
-      let successMessage = `Uploaded ${parsedContacts.length} contacts`;
+      let successMessage = `Uploaded ${duplicateCheck.unique.length} contacts`;
       if (personalizationFields.length > 0) {
         successMessage += ` with personalization fields: ${personalizationFields.join(', ')}`;
       }
@@ -446,6 +533,18 @@ export default function Contacts() {
         message={`Are you sure you want to delete all ${contacts.length} contacts? This action cannot be undone.`}
         confirmText="Delete All"
         variant="danger"
+      />
+
+      {/* Duplicate/Invalid Detection Dialog */}
+      <DuplicateDialog
+        isOpen={duplicateDialog.open}
+        onClose={() => setDuplicateDialog({ ...duplicateDialog, open: false })}
+        onConfirm={handleConfirmAddContacts}
+        type="contacts"
+        duplicates={duplicateDialog.duplicates}
+        duplicatesWithExisting={duplicateDialog.duplicatesWithExisting}
+        uniqueCount={duplicateDialog.uniqueContacts.length}
+        invalidItems={duplicateDialog.invalidItems}
       />
     </div>
   );
