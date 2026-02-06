@@ -1,4 +1,4 @@
-import { Activity, Bell, LogOut, Circle, Menu } from 'lucide-react';
+import { Activity, LogOut, Circle, Menu } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
@@ -78,9 +78,8 @@ export default function Header() {
                 <img 
                   src="/sendium-logo.png" 
                   alt="Sendium" 
-                  className="h-8 w-8 rounded-lg"
+                  className="h-30 w-30 rounded-lg"
                 />
-                <span className="hidden sm:block font-semibold text-stone-900">Sendium</span>
               </div>
             </div>
 
@@ -124,17 +123,6 @@ export default function Header() {
 
             {/* Right Side */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Notifications */}
-              <button 
-                className="relative p-2 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                aria-label={`Notifications${campaign.failed > 0 ? ` - ${campaign.failed} failed` : ''}`}
-              >
-                <Bell className="w-5 h-5" />
-                {campaign.failed > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                )}
-              </button>
-              
               {/* User Avatar & Dropdown */}
               <div className="flex items-center gap-3 pl-2 sm:pl-3 border-l border-stone-200 relative" ref={menuRef}>
                 <button 
