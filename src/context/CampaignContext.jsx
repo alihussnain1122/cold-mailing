@@ -216,7 +216,8 @@ export const CampaignProvider = ({ children }) => {
       const response = await campaignAPI.start({
         contacts: preparedContacts,
         template: preparedContacts[0]?.template || {},
-        delayMs: config.delayMin || 15000,
+        delayMin: config.delayMin || 10000,
+        delayMax: config.delayMax || 30000,
         campaignName: config.campaignName || `Campaign ${new Date().toLocaleDateString()}`,
         enableTracking: config.enableTracking !== false,
         senderName: config.senderName,
