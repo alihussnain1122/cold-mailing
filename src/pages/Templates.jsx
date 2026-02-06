@@ -33,12 +33,23 @@ export default function Templates() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiForm, setAiForm] = useState({
     purpose: 'sales_outreach',
+    customPurpose: '',
     industry: '',
     tone: 'professional',
     audience: '',
     keyPoints: [''],
+    availableFields: ['email'], // Default to email only
   });
   const [aiPreview, setAiPreview] = useState(null);
+
+  // Available personalization fields
+  const PERSONALIZATION_FIELDS = [
+    { id: 'email', label: 'Email', always: true },
+    { id: 'firstName', label: 'First Name' },
+    { id: 'lastName', label: 'Last Name' },
+    { id: 'company', label: 'Company' },
+    { id: 'position', label: 'Position/Title' },
+  ];
   const { user } = useAuth();
 
   // Auto-dismiss messages
@@ -256,11 +267,12 @@ export default function Templates() {
     
     try {
       const response = await aiAPI.generateTemplate({
-        purpose: aiForm.purpose,
+        purpose: aiForm.purpose === 'custom' ? aiForm.customPurpose : aiForm.purpose,
         industry: aiForm.industry,
         tone: aiForm.tone,
         audience: aiForm.audience,
         keyPoints: aiForm.keyPoints.filter(k => k.trim()),
+        availableFields: aiForm.availableFields,
         userId: user?.id,
       });
       
@@ -292,10 +304,12 @@ export default function Templates() {
       setAiPreview(null);
       setAiForm({
         purpose: 'sales_outreach',
+        customPurpose: '',
         industry: '',
         tone: 'professional',
         audience: '',
         keyPoints: [''],
+        availableFields: ['email'],
       });
     } catch (err) {
       setError(err.message);
@@ -645,7 +659,17 @@ export default function Templates() {
                     <option value="event_invitation">Event Invitation</option>
                     <option value="re_engagement">Re-engagement</option>
                     <option value="feedback_request">Feedback Request</option>
+                    <option value="custom">✨ Custom Purpose</option>
                   </select>
+                  {aiForm.purpose === 'custom' && (
+                    <input
+                      type="text"
+                      value={aiForm.customPurpose}
+                      onChange={(e) => setAiForm({ ...aiForm, customPurpose: e.target.value })}
+                      placeholder="Describe your email purpose..."
+                      className="w-full mt-2 px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -693,6 +717,46 @@ export default function Templates() {
                 </div>
               </div>
 
+              {/* Available Contact Fields */}
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  What contact data do you have? *
+                </label>
+                <p className="text-xs text-stone-500 mb-3">
+                  Select the fields available in your contacts. AI will only use these variables.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PERSONALIZATION_FIELDS.map((field) => {
+                    const isSelected = aiForm.availableFields.includes(field.id);
+                    const isDisabled = field.always;
+                    return (
+                      <button
+                        key={field.id}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => {
+                          if (isDisabled) return;
+                          setAiForm({
+                            ...aiForm,
+                            availableFields: isSelected
+                              ? aiForm.availableFields.filter(f => f !== field.id)
+                              : [...aiForm.availableFields, field.id]
+                          });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        {field.label}
+                        {isSelected && !isDisabled && ' ✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-sm font-medium text-stone-700">
@@ -735,7 +799,7 @@ export default function Templates() {
               <div className="bg-purple-50 border border-purple-100 rounded-lg p-3">
                 <p className="text-sm text-purple-700">
                   <Sparkles className="w-4 h-4 inline mr-1" />
-                  AI will automatically include personalization variables like <code className="bg-purple-100 px-1 rounded">{'{{firstName}}'}</code> and <code className="bg-purple-100 px-1 rounded">{'{{company}}'}</code>
+                  AI will use these variables: {aiForm.availableFields.map(f => `{{${f}}}`).join(', ')}
                 </p>
               </div>
 
