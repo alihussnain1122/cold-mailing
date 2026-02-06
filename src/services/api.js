@@ -223,3 +223,19 @@ export const sendAPI = {
     });
   },
 };
+
+// AI API
+export const aiAPI = {
+  generateTemplate: async (options) => {
+    return fetchAPI(API_ENDPOINTS.AI_GENERATE_TEMPLATE, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  },
+  improveTemplate: async (options) => {
+    return fetchAPI(API_ENDPOINTS.AI_IMPROVE_TEMPLATE, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  },
+};

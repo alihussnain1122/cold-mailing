@@ -27,6 +27,10 @@ export const API_ENDPOINTS = {
   SEND_TEST: `${API_BASE_URL}/api/send/test`,
   SEND_SINGLE: `${API_BASE_URL}/api/send/single`,
   
+  // AI Generation
+  AI_GENERATE_TEMPLATE: `${API_BASE_URL}/api/ai/generate-template`,
+  AI_IMPROVE_TEMPLATE: `${API_BASE_URL}/api/ai/improve-template`,
+  
   // Health check
   HEALTH: `${API_BASE_URL}/api/health`,
 };

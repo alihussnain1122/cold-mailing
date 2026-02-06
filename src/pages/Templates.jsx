@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Wand2, Loader2 } from 'lucide-react';
 import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
 import { templatesService } from '../services/supabase';
+import { aiAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { sanitizeAndFormat } from '../utils';
 
 const ITEMS_PER_PAGE = 10;
@@ -25,6 +27,19 @@ export default function Templates() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // AI Generation state
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiForm, setAiForm] = useState({
+    purpose: 'sales_outreach',
+    industry: '',
+    tone: 'professional',
+    audience: '',
+    keyPoints: [''],
+  });
+  const [aiPreview, setAiPreview] = useState(null);
+  const { user } = useAuth();
 
   // Auto-dismiss messages
   useEffect(() => {
@@ -234,6 +249,82 @@ export default function Templates() {
     fileInputRef.current?.click();
   }
 
+  // AI Template Generation
+  async function handleAIGenerate() {
+    setAiGenerating(true);
+    setError('');
+    
+    try {
+      const response = await aiAPI.generateTemplate({
+        purpose: aiForm.purpose,
+        industry: aiForm.industry,
+        tone: aiForm.tone,
+        audience: aiForm.audience,
+        keyPoints: aiForm.keyPoints.filter(k => k.trim()),
+        userId: user?.id,
+      });
+      
+      if (response.success && response.template) {
+        setAiPreview(response.template);
+      } else {
+        throw new Error(response.error || 'Failed to generate template');
+      }
+    } catch (err) {
+      setError(err.message || 'AI generation failed. Please try again.');
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  async function handleSaveAITemplate() {
+    if (!aiPreview) return;
+    
+    setSaving(true);
+    try {
+      await templatesService.add({
+        name: aiPreview.name || `AI: ${aiForm.purpose}`,
+        subject: aiPreview.subject,
+        body: aiPreview.body,
+      });
+      await loadTemplates();
+      setSuccess('AI template saved successfully!');
+      setIsAIModalOpen(false);
+      setAiPreview(null);
+      setAiForm({
+        purpose: 'sales_outreach',
+        industry: '',
+        tone: 'professional',
+        audience: '',
+        keyPoints: [''],
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addKeyPoint() {
+    if (aiForm.keyPoints.length < 5) {
+      setAiForm({ ...aiForm, keyPoints: [...aiForm.keyPoints, ''] });
+    }
+  }
+
+  function updateKeyPoint(index, value) {
+    const newKeyPoints = [...aiForm.keyPoints];
+    newKeyPoints[index] = value;
+    setAiForm({ ...aiForm, keyPoints: newKeyPoints });
+  }
+
+  function removeKeyPoint(index) {
+    if (aiForm.keyPoints.length > 1) {
+      setAiForm({ 
+        ...aiForm, 
+        keyPoints: aiForm.keyPoints.filter((_, i) => i !== index) 
+      });
+    }
+  }
+
   if (loading && templates.length === 0) {
     return <PageLoader />;
   }
@@ -263,6 +354,10 @@ export default function Templates() {
           <Button variant="outline" size="sm" onClick={handleImportClick} loading={uploading}>
             <Upload className="w-4 h-4 sm:mr-2" aria-hidden="true" />
             <span className="hidden sm:inline">{uploading ? 'Uploading...' : 'Import'}</span>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setIsAIModalOpen(true)}>
+            <Sparkles className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+            <span className="hidden sm:inline">Generate with AI</span>
           </Button>
           <Button size="sm" onClick={openAddModal}>
             <Plus className="w-4 h-4 sm:mr-2" aria-hidden="true" />
@@ -512,6 +607,219 @@ export default function Templates() {
         confirmText="Delete All"
         variant="danger"
       />
+
+      {/* AI Generation Modal */}
+      <Modal
+        isOpen={isAIModalOpen}
+        onClose={() => {
+          setIsAIModalOpen(false);
+          setAiPreview(null);
+        }}
+        title={
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-600" />
+            Generate with AI
+          </div>
+        }
+        size="lg"
+      >
+        <div className="space-y-5">
+          {!aiPreview ? (
+            <>
+              {/* AI Form */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Email Purpose *
+                  </label>
+                  <select
+                    value={aiForm.purpose}
+                    onChange={(e) => setAiForm({ ...aiForm, purpose: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="sales_outreach">Sales Outreach</option>
+                    <option value="follow_up">Follow-up</option>
+                    <option value="product_launch">Product Launch</option>
+                    <option value="newsletter">Newsletter</option>
+                    <option value="partnership">Partnership Request</option>
+                    <option value="event_invitation">Event Invitation</option>
+                    <option value="re_engagement">Re-engagement</option>
+                    <option value="feedback_request">Feedback Request</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Tone *
+                  </label>
+                  <select
+                    value={aiForm.tone}
+                    onChange={(e) => setAiForm({ ...aiForm, tone: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="casual">Casual</option>
+                    <option value="formal">Formal</option>
+                    <option value="persuasive">Persuasive</option>
+                    <option value="enthusiastic">Enthusiastic</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Industry (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={aiForm.industry}
+                    onChange={(e) => setAiForm({ ...aiForm, industry: e.target.value })}
+                    placeholder="e.g., SaaS, E-commerce, Finance"
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Target Audience (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={aiForm.audience}
+                    onChange={(e) => setAiForm({ ...aiForm, audience: e.target.value })}
+                    placeholder="e.g., CTOs, Marketing Managers"
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-stone-700">
+                    Key Points to Include (optional)
+                  </label>
+                  {aiForm.keyPoints.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={addKeyPoint}
+                      className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      + Add Point
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {aiForm.keyPoints.map((point, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={point}
+                        onChange={(e) => updateKeyPoint(index, e.target.value)}
+                        placeholder={`Key point ${index + 1}`}
+                        className="flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                      />
+                      {aiForm.keyPoints.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeKeyPoint(index)}
+                          className="p-2 text-stone-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-3">
+                <p className="text-sm text-purple-700">
+                  <Sparkles className="w-4 h-4 inline mr-1" />
+                  AI will automatically include personalization variables like <code className="bg-purple-100 px-1 rounded">{'{{firstName}}'}</code> and <code className="bg-purple-100 px-1 rounded">{'{{company}}'}</code>
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setIsAIModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleAIGenerate} 
+                  loading={aiGenerating}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  Generate Template
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* AI Preview */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-green-700 font-medium">
+                  ✓ Template generated! Review and save it below.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Subject Line
+                  </label>
+                  <input
+                    type="text"
+                    value={aiPreview.subject}
+                    onChange={(e) => setAiPreview({ ...aiPreview, subject: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Email Body
+                  </label>
+                  <textarea
+                    value={aiPreview.body}
+                    onChange={(e) => setAiPreview({ ...aiPreview, body: e.target.value })}
+                    rows={10}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500 resize-none font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between gap-3 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setAiPreview(null)}
+                >
+                  ← Generate Another
+                </Button>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => {
+                      setIsAIModalOpen(false);
+                      setAiPreview(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSaveAITemplate} 
+                    loading={saving}
+                  >
+                    Save Template
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
