@@ -1,5 +1,6 @@
 import { API_ENDPOINTS } from '../config/api';
 import { smtpService } from './supabase';
+import { supabase } from '../config/supabase';
 
 // Error types for better handling
 export class NetworkError extends Error {
@@ -17,20 +18,48 @@ export class ServerError extends Error {
   }
 }
 
-// Generic fetch wrapper with error handling
+export class AuthError extends Error {
+  constructor(message = 'Authentication required. Please log in.') {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+/**
+ * Get the current user's JWT token for API authentication
+ */
+async function getAuthToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
+
+// Generic fetch wrapper with error handling and auth
 async function fetchAPI(url, options = {}) {
   try {
+    // Get auth token
+    const token = await getAuthToken();
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    // Add Authorization header if we have a token
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     });
     
     const data = await response.json();
     
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError(data.error || 'Authentication required');
+      }
       if (response.status >= 500) {
         throw new ServerError(data.error || 'Server error', response.status);
       }
@@ -237,5 +266,78 @@ export const aiAPI = {
       method: 'POST',
       body: JSON.stringify(options),
     });
+  },
+};
+
+// Campaign API (Server-side queue)
+export const campaignAPI = {
+  // Start a new campaign (server-side execution)
+  start: async (options) => {
+    const creds = await smtpService.get();
+    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+      throw new Error('SMTP not configured. Please set up your credentials in Settings.');
+    }
+    
+    return fetchAPI(API_ENDPOINTS.CAMPAIGN_START, {
+      method: 'POST',
+      body: JSON.stringify({
+        contacts: options.contacts,
+        template: options.template,
+        credentials: {
+          smtpHost: creds.smtpHost,
+          smtpPort: creds.smtpPort,
+          emailUser: creds.emailUser,
+          emailPass: creds.emailPass,
+          senderName: creds.senderName,
+        },
+        senderName: options.senderName || creds.senderName,
+        delayMs: options.delayMs || 15000,
+        campaignName: options.campaignName,
+        enableTracking: options.enableTracking !== false,
+      }),
+    });
+  },
+
+  // Pause a running campaign
+  pause: async (campaignId) => {
+    return fetchAPI(API_ENDPOINTS.CAMPAIGN_PAUSE, {
+      method: 'POST',
+      body: JSON.stringify({ campaignId }),
+    });
+  },
+
+  // Resume a paused campaign
+  resume: async (campaignId) => {
+    const creds = await smtpService.get();
+    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+      throw new Error('SMTP not configured. Please set up your credentials in Settings.');
+    }
+    
+    return fetchAPI(API_ENDPOINTS.CAMPAIGN_RESUME, {
+      method: 'POST',
+      body: JSON.stringify({
+        campaignId,
+        credentials: {
+          smtpHost: creds.smtpHost,
+          smtpPort: creds.smtpPort,
+          emailUser: creds.emailUser,
+          emailPass: creds.emailPass,
+          senderName: creds.senderName,
+        },
+      }),
+    });
+  },
+
+  // Stop a campaign completely
+  stop: async (campaignId) => {
+    return fetchAPI(API_ENDPOINTS.CAMPAIGN_STOP, {
+      method: 'POST',
+      body: JSON.stringify({ campaignId }),
+    });
+  },
+
+  // Get campaign status
+  getStatus: async (campaignId) => {
+    return fetchAPI(API_ENDPOINTS.CAMPAIGN_STATUS(campaignId));
   },
 };

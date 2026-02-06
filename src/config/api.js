@@ -31,6 +31,13 @@ export const API_ENDPOINTS = {
   AI_GENERATE_TEMPLATE: `${API_BASE_URL}/api/ai/generate-template`,
   AI_IMPROVE_TEMPLATE: `${API_BASE_URL}/api/ai/improve-template`,
   
+  // Campaign Queue (Server-side execution)
+  CAMPAIGN_START: `${API_BASE_URL}/api/campaign/start`,
+  CAMPAIGN_PAUSE: `${API_BASE_URL}/api/campaign/pause`,
+  CAMPAIGN_RESUME: `${API_BASE_URL}/api/campaign/resume`,
+  CAMPAIGN_STOP: `${API_BASE_URL}/api/campaign/stop`,
+  CAMPAIGN_STATUS: (id) => `${API_BASE_URL}/api/campaign/status/${id}`,
+  
   // Health check
   HEALTH: `${API_BASE_URL}/api/health`,
 };
