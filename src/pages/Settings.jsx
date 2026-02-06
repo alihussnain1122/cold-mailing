@@ -138,7 +138,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Security Warning */}
       {!secureConnection && (
         <Alert 
@@ -148,10 +148,10 @@ export default function Settings() {
       )}
 
       {/* Page Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-stone-900">Settings</h2>
-          <p className="text-stone-500 mt-1">Configure your SMTP email server settings</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-stone-900">Settings</h2>
+          <p className="text-stone-500 mt-1 text-sm sm:text-base">Configure your SMTP email server settings</p>
         </div>
         <Badge variant={configured ? 'success' : 'warning'} size="md">
           {configured ? (
@@ -179,24 +179,24 @@ export default function Settings() {
           </div>
         </Card>
       ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Main Form */}
         <div className="lg:col-span-2">
           <Card>
             {/* Status Banner */}
-            <div className={`mb-6 p-4 rounded-xl flex items-center gap-4 ${
+            <div className={`mb-6 p-3 sm:p-4 rounded-xl flex items-start sm:items-center gap-3 sm:gap-4 ${
               configured 
                 ? 'bg-emerald-50 border border-emerald-200' 
                 : 'bg-amber-50 border border-amber-200'
             }`}>
-              <div className={`p-3 rounded-xl ${configured ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                <Shield className={`w-6 h-6 ${configured ? 'text-emerald-600' : 'text-amber-600'}`} />
+              <div className={`p-2 sm:p-3 rounded-xl shrink-0 ${configured ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                <Shield className={`w-5 h-5 sm:w-6 sm:h-6 ${configured ? 'text-emerald-600' : 'text-amber-600'}`} />
               </div>
               <div>
-                <h3 className={`font-semibold ${configured ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  {configured ? 'SMTP Server Connected' : 'SMTP Configuration Required'}
+                <h3 className={`font-semibold text-sm sm:text-base ${configured ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  {configured ? 'SMTP Connected' : 'SMTP Required'}
                 </h3>
-                <p className={`text-sm ${configured ? 'text-emerald-600' : 'text-amber-600'}`}>
+                <p className={`text-xs sm:text-sm ${configured ? 'text-emerald-600' : 'text-amber-600'}`}>
                   {configured 
                     ? 'Your email server is configured and ready to send emails' 
                     : 'Configure your SMTP settings to start sending emails'}

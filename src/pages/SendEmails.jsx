@@ -239,26 +239,27 @@ export default function SendEmails() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-stone-900">Send Emails</h2>
-          <p className="text-stone-500 mt-1">Configure and start your email campaign</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-stone-900">Send Emails</h2>
+          <p className="text-stone-500 mt-1 text-sm sm:text-base">Configure and start your email campaign</p>
         </div>
         <Button 
           variant="outline" 
+          size="sm"
           onClick={() => loadData(true)}
           loading={refreshing}
           aria-label="Refresh data"
         >
-          <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
-          Refresh
+          <RefreshCw className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+          <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
 
       {error && <Alert type="error" message={error} />}
       {success && <Alert type="success" message={success} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Configuration */}
         <Card title="Campaign Configuration">
           <div className="space-y-4">
@@ -269,16 +270,16 @@ export default function SendEmails() {
               placeholder="Name that appears in emails"
             />
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <Input
-                label="Min Delay (seconds)"
+                label="Min Delay (s)"
                 type="number"
                 value={delayMin}
                 onChange={(e) => setDelayMin(Number(e.target.value))}
                 min="1"
               />
               <Input
-                label="Max Delay (seconds)"
+                label="Max Delay (s)"
                 type="number"
                 value={delayMax}
                 onChange={(e) => setDelayMax(Number(e.target.value))}

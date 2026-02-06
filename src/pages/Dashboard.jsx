@@ -63,11 +63,11 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-stone-900">Dashboard</h1>
-            <p className="text-stone-500 mt-1">
+            <p className="text-stone-500 mt-1 text-sm sm:text-base">
               Monitor your email campaigns and manage your outreach
             </p>
           </div>
@@ -87,19 +87,19 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="flex flex-wrap gap-3 mt-5 pt-5 border-t border-stone-100">
-          <Button onClick={() => navigate('/send')}>
-            <PlayCircle className="w-4 h-4 mr-2" />
-            Start Campaign
+        <div className="flex flex-wrap gap-2 sm:gap-3 mt-5 pt-5 border-t border-stone-100">
+          <Button size="sm" onClick={() => navigate('/send')}>
+            <PlayCircle className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Start Campaign</span>
           </Button>
-          <Button variant="outline" onClick={() => navigate('/templates')}>
-            <FileText className="w-4 h-4 mr-2" />
-            Create Template
+          <Button variant="outline" size="sm" onClick={() => navigate('/templates')}>
+            <FileText className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Create Template</span>
           </Button>
           {!stats.configured && (
-            <Button variant="outline" onClick={() => navigate('/settings')}>
-              <Settings className="w-4 h-4 mr-2" />
-              Configure SMTP
+            <Button variant="outline" size="sm" onClick={() => navigate('/settings')}>
+              <Settings className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Configure SMTP</span>
             </Button>
           )}
         </div>
@@ -109,7 +109,7 @@ export default function Dashboard() {
       <OnboardingWizard />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           icon={FileText}
           label="Email Templates"
@@ -391,18 +391,21 @@ export default function Dashboard() {
 function StatCard({ icon: Icon, label, value, sublabel, onClick }) {
   return (
     <div 
-      className="bg-white rounded-lg border border-stone-200 p-5 hover:border-stone-300 transition-all cursor-pointer"
+      className="bg-white rounded-xl border border-stone-200 p-4 sm:p-5 hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer group"
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => onClick && e.key === 'Enter' && onClick()}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="p-2 rounded-lg bg-stone-100">
-          <Icon className="w-5 h-5 text-stone-600" />
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <div className="p-2 rounded-lg bg-stone-100 group-hover:bg-stone-200 transition-colors">
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-stone-600" />
         </div>
       </div>
       
-      <div className="text-2xl font-semibold text-stone-900">{value}</div>
-      <div className="text-sm text-stone-600 mt-0.5">{label}</div>
-      <div className="text-xs text-stone-400 mt-1">{sublabel}</div>
+      <div className="text-xl sm:text-2xl font-semibold text-stone-900">{value}</div>
+      <div className="text-xs sm:text-sm text-stone-600 mt-0.5">{label}</div>
+      <div className="text-xs text-stone-400 mt-1 hidden sm:block">{sublabel}</div>
     </div>
   );
 }

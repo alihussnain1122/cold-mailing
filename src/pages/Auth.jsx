@@ -29,7 +29,8 @@ export default function Auth() {
         }
         const { error } = await signUp(email, password, fullName);
         if (error) throw error;
-setSuccess('Account created! Please check your email to verify your account before logging in.');        setIsLogin(true);
+        setSuccess('Account created! Please check your email to verify your account before logging in.');
+        setIsLogin(true);
       }
     } catch (err) {
       setError(err.message);

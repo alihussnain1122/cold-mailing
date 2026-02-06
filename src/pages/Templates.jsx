@@ -1,8 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Plus, Trash2, Edit, Upload, Eye } from 'lucide-react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader } from '../components/UI';
 import { templatesService } from '../services/supabase';
 import { sanitizeAndFormat } from '../utils';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Templates() {
   const [templates, setTemplates] = useState([]);
@@ -12,6 +14,7 @@ export default function Templates() {
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -48,6 +51,21 @@ export default function Templates() {
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
+
+  // Pagination logic
+  const { paginatedTemplates, totalPages } = useMemo(() => {
+    const total = Math.ceil(templates.length / ITEMS_PER_PAGE);
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const paginated = templates.slice(start, start + ITEMS_PER_PAGE);
+    return { paginatedTemplates: paginated, totalPages: total };
+  }, [templates, currentPage]);
+
+  // Reset to page 1 when templates change significantly
+  useEffect(() => {
+    if (currentPage > 1 && templates.length <= (currentPage - 1) * ITEMS_PER_PAGE) {
+      setCurrentPage(1);
+    }
+  }, [templates.length, currentPage]);
 
   function openAddModal() {
     setEditId(null);
@@ -222,12 +240,12 @@ export default function Templates() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-stone-900">Email Templates</h2>
           <p className="text-stone-500 mt-1">Create and manage your email templates</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <input 
             type="file" 
             ref={fileInputRef}
@@ -237,18 +255,18 @@ export default function Templates() {
             aria-label="Import templates CSV or JSON file"
           />
           {templates.length > 0 && (
-            <Button variant="danger" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
-              <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
-              Delete All
+            <Button variant="danger" size="sm" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
+              <Trash2 className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+              <span className="hidden sm:inline">Delete All</span>
             </Button>
           )}
-          <Button variant="outline" onClick={handleImportClick} loading={uploading}>
-            <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
-            {uploading ? 'Uploading...' : 'Import CSV/JSON'}
+          <Button variant="outline" size="sm" onClick={handleImportClick} loading={uploading}>
+            <Upload className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+            <span className="hidden sm:inline">{uploading ? 'Uploading...' : 'Import'}</span>
           </Button>
-          <Button onClick={openAddModal}>
-            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-            Add Template
+          <Button size="sm" onClick={openAddModal}>
+            <Plus className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+            <span className="hidden sm:inline">Add Template</span>
           </Button>
         </div>
       </div>
@@ -256,93 +274,155 @@ export default function Templates() {
       {error && <Alert type="error" message={error} className="animate-fade-in" />}
       {success && <Alert type="success" message={success} className="animate-fade-in" />}
 
-      {/* Format Help Card */}
+      {/* Format Help Card - Collapsible on mobile */}
       <Card>
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="bg-stone-200 rounded-full p-2 mt-0.5">
+        <details className="group">
+          <summary className="flex items-center gap-3 cursor-pointer list-none">
+            <div className="bg-stone-100 rounded-lg p-2">
               <Upload className="w-5 h-5 text-stone-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-stone-900 mb-1">Easy Template Import</h3>
-              <p className="text-sm text-stone-700 mb-2">
-                Upload templates using <strong>CSV</strong> (Excel/Sheets) or JSON format
-              </p>
-              <details className="text-sm text-stone-600">
-                <summary className="cursor-pointer hover:text-stone-900 font-medium mb-2">
-                  📋 Click to see CSV format example
-                </summary>
-                <div className="mt-2 pl-4 border-l-2 border-stone-200 space-y-2">
-                  <p><strong>Required columns:</strong> subject, body</p>
-                  <p><strong>Optional column:</strong> name (for your reference)</p>
-                  <div className="bg-white rounded p-2 font-mono text-xs overflow-x-auto">
-                    <div>name,subject,body</div>
-                    <div>Welcome,Welcome to Our Service!,"Hi!\n\nWelcome to our platform.\n\nBest regards"</div>
-                  </div>
-                  <p className="text-xs">💡 Use <code className="bg-stone-100 px-1 rounded">\n</code> for line breaks</p>
-                  <p className="text-xs">💡 Open CSV in Excel or Google Sheets to edit easily</p>
-                </div>
-              </details>
+              <h3 className="font-semibold text-stone-900">Easy Template Import</h3>
+              <p className="text-sm text-stone-500">CSV or JSON format supported</p>
+            </div>
+            <div className="text-stone-400 group-open:rotate-180 transition-transform">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </summary>
+          <div className="mt-4 pt-4 border-t border-stone-100">
+            <div className="text-sm text-stone-600 space-y-3">
+              <p><strong>Required columns:</strong> subject, body</p>
+              <p><strong>Optional column:</strong> name (for your reference)</p>
+              <div className="bg-stone-50 rounded-lg p-3 font-mono text-xs overflow-x-auto">
+                <div className="text-stone-500">name,subject,body</div>
+                <div>Welcome,Welcome!,"Hi!\n\nWelcome.\n\nBest"</div>
+              </div>
+              <p className="text-xs text-stone-500">💡 Use <code className="bg-stone-100 px-1 rounded">\n</code> for line breaks</p>
             </div>
           </div>
-        </div>
+        </details>
       </Card>
 
       {templates.length === 0 ? (
         <Card>
-          <div className="text-center py-12">
-            <div className="bg-stone-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Plus className="w-8 h-8 text-stone-400" aria-hidden="true" />
+          <div className="text-center py-12 px-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-stone-100 to-stone-200 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Plus className="w-8 h-8 text-stone-500" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-medium text-stone-900 mb-2">No templates yet</h3>
-            <p className="text-stone-500 mb-4">Create your first email template to get started</p>
-            <Button onClick={openAddModal}>Create Template</Button>
+            <h3 className="text-lg font-semibold text-stone-900 mb-2">No templates yet</h3>
+            <p className="text-stone-500 max-w-sm mx-auto mb-6">Create your first email template to start sending personalized campaigns</p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button onClick={openAddModal}>
+                Create Template
+              </Button>
+              <Button variant="outline" onClick={handleImportClick}>
+                Import from File
+              </Button>
+            </div>
           </div>
         </Card>
       ) : (
-        <div className="grid gap-4" role="list" aria-label="Email templates">
-          {templates.map((template) => (
-            <Card key={template.id} role="listitem">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-medium text-stone-400">{template.name || 'Untitled'}</span>
-                    <h3 className="text-lg font-semibold text-stone-900 truncate">
-                      {template.subject}
-                    </h3>
+        <>
+          <div className="grid gap-4" role="list" aria-label="Email templates">
+            {paginatedTemplates.map((template, index) => {
+              const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+              return (
+                <Card key={template.id} role="listitem">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-stone-400">#{globalIndex}</span>
+                        {template.name && (
+                          <span className="text-xs font-medium text-stone-500">{template.name}</span>
+                        )}
+                      </div>
+                      <h3 className="text-base sm:text-lg font-semibold text-stone-900 break-words">
+                        {template.subject}
+                      </h3>
+                      <p className="text-stone-500 text-sm line-clamp-2 mt-1">
+                        {template.body.substring(0, 200)}...
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 sm:gap-2 sm:ml-4 border-t sm:border-t-0 pt-3 sm:pt-0">
+                      <button
+                        onClick={() => setPreviewTemplate(template)}
+                        className="flex-1 sm:flex-none p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                        aria-label={`Preview template: ${template.subject}`}
+                      >
+                        <Eye className="w-5 h-5 mx-auto" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => openEditModal(template)}
+                        className="flex-1 sm:flex-none p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                        aria-label={`Edit template: ${template.subject}`}
+                      >
+                        <Edit className="w-5 h-5 mx-auto" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm({ open: true, id: template.id })}
+                        disabled={deleting === template.id}
+                        className="flex-1 sm:flex-none p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        aria-label={`Delete template: ${template.subject}`}
+                      >
+                        <Trash2 className="w-5 h-5 mx-auto" aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-stone-500 text-sm line-clamp-2">
-                    {template.body.substring(0, 200)}...
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 ml-4">
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="bg-white border border-stone-200 rounded-xl p-4 mt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-sm text-stone-500 order-2 sm:order-1">
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, templates.length)} of {templates.length} templates
+                </p>
+                <div className="flex items-center gap-1 order-1 sm:order-2">
                   <button
-                    onClick={() => setPreviewTemplate(template)}
-                    className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                    aria-label={`Preview template: ${template.subject}`}
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="First page"
                   >
-                    <Eye className="w-5 h-5" aria-hidden="true" />
+                    <ChevronsLeft className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => openEditModal(template)}
-                    className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                    aria-label={`Edit template: ${template.subject}`}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Previous page"
                   >
-                    <Edit className="w-5 h-5" aria-hidden="true" />
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm text-stone-600 px-3 min-w-16 text-center">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setDeleteConfirm({ open: true, id: template.id })}
-                    disabled={deleting === template.id}
-                    className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                    aria-label={`Delete template: ${template.subject}`}
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Last page"
                   >
-                    <Trash2 className="w-5 h-5" aria-hidden="true" />
+                    <ChevronsRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Add/Edit Modal */}

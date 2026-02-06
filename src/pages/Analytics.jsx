@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
 import { Card, Badge, Button, PageLoader } from '../components/UI';
 import { trackingService, campaignService } from '../services/supabase';
 
@@ -84,15 +84,15 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6">
+      <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-stone-900">Analytics</h1>
-            <p className="text-stone-500 mt-1">Track email opens, clicks, and engagement</p>
+            <h1 className="text-xl sm:text-2xl font-semibold text-stone-900">Analytics</h1>
+            <p className="text-stone-500 mt-1 text-sm sm:text-base">Track email opens, clicks, and engagement</p>
           </div>
-          <Button variant="outline" onClick={loadInitialData}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+          <Button variant="outline" size="sm" onClick={loadInitialData}>
+            <RefreshCw className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
 
@@ -102,7 +102,7 @@ export default function Analytics() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
                 activeTab === tab.id
                   ? 'bg-stone-900 text-white'
                   : 'text-stone-600 hover:bg-stone-100'
@@ -127,62 +127,76 @@ export default function Analytics() {
           {campaigns.length > 0 ? (
             <>
               {/* Campaign Selector */}
-              <div className="bg-white border border-stone-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-stone-700">
-                    View Analytics For
-                  </label>
+              <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5">
+                <div className="flex items-start sm:items-center justify-between gap-2 mb-3">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700">
+                      View Analytics For
+                    </label>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} available
+                    </p>
+                  </div>
                   {selectedCampaign && campaigns.length > 1 && (
                     <button
                       onClick={() => setSelectedCampaign(campaigns[0]?.id || null)}
-                      className="text-xs text-stone-500 hover:text-stone-700 flex items-center gap-1"
+                      className="text-xs text-stone-500 hover:text-stone-700 flex items-center gap-1 whitespace-nowrap"
                     >
                       <X className="w-3 h-3" />
-                      Reset to latest
+                      Reset
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-stone-500 mb-3">
-                  Choose a campaign to see its performance metrics
-                </p>
-                <div className="flex gap-2">
+                
+                {/* Native select for all screen sizes - works well on mobile */}
+                <div className="relative">
                   <select
                     value={selectedCampaign || ''}
                     onChange={(e) => setSelectedCampaign(e.target.value)}
-                    className="flex-1 px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
+                    className="w-full px-3 py-3 pr-10 border border-stone-300 rounded-lg bg-white text-stone-900 text-sm focus:ring-2 focus:ring-stone-500 focus:border-stone-500 appearance-none"
                   >
                     {campaigns.map((campaign) => {
                       const date = new Date(campaign.created_at);
-                      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                      const status = campaign.sent_count === campaign.total_contacts ? '✓ Completed' : 'In Progress';
+                      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      const status = campaign.sent_count === campaign.total_contacts ? '✓' : '•';
                       return (
                         <option key={campaign.id} value={campaign.id}>
-                          {formattedDate} • {campaign.sent_count} of {campaign.total_contacts} emails sent • {status}
+                          {formattedDate} {status} {campaign.sent_count}/{campaign.total_contacts} sent
                         </option>
                       );
                     })}
                   </select>
-                  {campaigns.length > 1 && (
-                    <button
-                      onClick={() => {
-                        setCampaignStats(null);
-                        setTrackingEvents([]);
-                        setSelectedCampaign(campaigns[0]?.id || null);
-                      }}
-                      className="px-3 py-2.5 border border-stone-300 rounded-lg text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors"
-                      title="Clear filter and show latest campaign"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  )}
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
                 </div>
-                <p className="text-xs text-stone-400 mt-2">
-                  {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} found
-                </p>
+
+                {/* Selected campaign preview */}
+                {currentCampaign && (
+                  <div className="mt-3 p-3 bg-stone-50 rounded-lg border border-stone-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-stone-900">
+                        {new Date(currentCampaign.created_at).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        currentCampaign.sent_count === currentCampaign.total_contacts
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {currentCampaign.sent_count === currentCampaign.total_contacts ? 'Completed' : 'In Progress'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-stone-500 mt-1">
+                      {currentCampaign.sent_count} of {currentCampaign.total_contacts} emails sent
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <StatCard
                   icon={Mail}
                   label="Total Sent"
@@ -216,18 +230,20 @@ export default function Analytics() {
               {/* Recent Activity */}
               <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
                 {/* Header with filters */}
-                <div className="p-5 border-b border-stone-100">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-stone-900">Recent Activity</h3>
-                      <p className="text-sm text-stone-500 mt-0.5">
-                        {filteredEvents.length} {filterType === 'all' ? 'total' : filterType} event{filteredEvents.length !== 1 ? 's' : ''}
-                      </p>
+                <div className="p-4 sm:p-5 border-b border-stone-100">
+                  <div className="flex flex-col gap-3 sm:gap-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-stone-900">Recent Activity</h3>
+                        <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
+                          {filteredEvents.length} {filterType === 'all' ? 'total' : filterType} event{filteredEvents.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setFilterType('all')}
-                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
                           filterType === 'all'
                             ? 'bg-stone-900 text-white'
                             : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
@@ -237,24 +253,24 @@ export default function Analytics() {
                       </button>
                       <button
                         onClick={() => setFilterType('open')}
-                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 ${
                           filterType === 'open'
                             ? 'bg-emerald-600 text-white'
                             : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                         }`}
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         Opens
                       </button>
                       <button
                         onClick={() => setFilterType('click')}
-                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 ${
                           filterType === 'click'
                             ? 'bg-amber-600 text-white'
                             : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                         }`}
                       >
-                        <MousePointer className="w-3.5 h-3.5" />
+                        <MousePointer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         Clicks
                       </button>
                     </div>
@@ -450,24 +466,24 @@ function StatCard({ icon: Icon, label, value, sublabel, color }) {
   };
 
   return (
-    <div className="bg-white border border-stone-200 rounded-xl p-5">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${colors[color]}`}>
-          <Icon className="w-5 h-5" />
+    <div className="bg-white border border-stone-200 rounded-xl p-3 sm:p-5">
+      <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border ${colors[color]}`}>
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
       </div>
-      <div className="text-2xl font-semibold text-stone-900">{value}</div>
-      <div className="text-sm text-stone-500">{label}</div>
-      {sublabel && <div className="text-xs text-stone-400 mt-1">{sublabel}</div>}
+      <div className="text-xl sm:text-2xl font-semibold text-stone-900">{value}</div>
+      <div className="text-xs sm:text-sm text-stone-500">{label}</div>
+      {sublabel && <div className="text-xs text-stone-400 mt-1 hidden sm:block">{sublabel}</div>}
     </div>
   );
 }
 
 function EmptyState({ icon: Icon, title, description }) {
   return (
-    <div className="text-center py-8">
-      <div className="w-12 h-12 bg-stone-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-        <Icon className="w-6 h-6 text-stone-400" />
+    <div className="text-center py-8 px-4">
+      <div className="w-12 h-12 bg-gradient-to-br from-stone-100 to-stone-200 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+        <Icon className="w-6 h-6 text-stone-500" />
       </div>
       <h3 className="text-sm font-medium text-stone-900">{title}</h3>
       <p className="text-sm text-stone-500 mt-1">{description}</p>

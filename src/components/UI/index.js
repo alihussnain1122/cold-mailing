@@ -8,4 +8,5 @@ export { default as Alert } from './Alert';
 export { default as LoadingSpinner, PageLoader } from './LoadingSpinner';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as OnboardingWizard } from './OnboardingWizard';
+export { default as EmptyState } from './EmptyState';
 export { useMarkTestEmailSent, useMarkFirstCampaignSent } from '../../hooks/useOnboarding';
