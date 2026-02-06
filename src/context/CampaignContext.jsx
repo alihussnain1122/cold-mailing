@@ -209,15 +209,16 @@ export const CampaignProvider = ({ children }) => {
       log(`Executing campaign with ${pendingEmails.length} pending emails`);
 
       for (let i = 0; i < pendingEmails.length; i++) {
-        // Check stop flag
+        // Check stop flag first - immediate response to pause button
         if (stopRef.current) {
           log('Campaign stopped by user');
-          await campaignService.updateStatus(campaignId, 'paused');
+          // Don't update status here - stopCampaign already did it
           setCampaignState(prev => ({
             ...prev,
             isRunning: false,
             status: 'paused',
             isExecuting: false,
+            nextEmailIn: 0,
           }));
           executingRef.current = false;
           return;
@@ -231,6 +232,7 @@ export const CampaignProvider = ({ children }) => {
             isRunning: false,
             status: 'paused',
             isExecuting: false,
+            nextEmailIn: 0,
           }));
           executingRef.current = false;
           return;
@@ -533,20 +535,28 @@ export const CampaignProvider = ({ children }) => {
     const currentState = campaignState;
     notifyCampaignPaused(currentState.sent, currentState.total);
     
-    // If we're not executing, we need to update Supabase directly
-    if (!executingRef.current && campaignState.campaignId) {
+    // Always update Supabase to paused status
+    if (campaignState.campaignId) {
       try {
         await campaignService.updateStatus(campaignState.campaignId, 'paused');
+        
+        // Update local state immediately
         setCampaignState(prev => ({
           ...prev,
           isRunning: false,
           status: 'paused',
+          isExecuting: false,
         }));
+        
+        // Reset executing ref since we're paused
+        executingRef.current = false;
+        
+        log('Campaign paused successfully');
       } catch (err) {
         log('Failed to pause campaign:', err);
       }
     }
-  }, [campaignState.campaignId]);
+  }, [campaignState.campaignId, campaignState.sent, campaignState.total]);
 
   const resetCampaign = useCallback(async () => {
     log('Resetting campaign...');

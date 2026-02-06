@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Card, Badge, Button, PageLoader } from '../components/UI';
 import { trackingService, campaignService } from '../services/supabase';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
@@ -10,6 +12,8 @@ export default function Analytics() {
   const [campaignStats, setCampaignStats] = useState(null);
   const [trackingEvents, setTrackingEvents] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filterType, setFilterType] = useState('all'); // 'all', 'open', 'click'
 
   useEffect(() => {
     loadInitialData();
@@ -50,6 +54,24 @@ export default function Analytics() {
   };
 
   const currentCampaign = campaigns.find(c => c.id === selectedCampaign);
+
+  // Filter and paginate events
+  const filteredEvents = useMemo(() => {
+    if (filterType === 'all') return trackingEvents;
+    return trackingEvents.filter(e => e.tracking_type === filterType);
+  }, [trackingEvents, filterType]);
+
+  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
+  
+  const paginatedEvents = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredEvents.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredEvents, currentPage]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, selectedCampaign]);
 
   if (loading) {
     return <PageLoader />;
@@ -129,7 +151,7 @@ export default function Analytics() {
                     onChange={(e) => setSelectedCampaign(e.target.value)}
                     className="flex-1 px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                   >
-                    {campaigns.map((campaign, index) => {
+                    {campaigns.map((campaign) => {
                       const date = new Date(campaign.created_at);
                       const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                       const status = campaign.sent_count === campaign.total_contacts ? '✓ Completed' : 'In Progress';
@@ -192,46 +214,215 @@ export default function Analytics() {
               </div>
 
               {/* Recent Activity */}
-              <Card title="Recent Activity">
-                {trackingEvents.length > 0 ? (
-                  <div className="divide-y divide-stone-100">
-                    {trackingEvents.slice(0, 20).map(event => (
-                      <div key={event.id} className="py-3 flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          event.tracking_type === 'open' ? 'bg-emerald-100' :
-                          event.tracking_type === 'click' ? 'bg-amber-100' :
-                          'bg-stone-100'
-                        }`}>
-                          {event.tracking_type === 'open' && <Eye className="w-4 h-4 text-emerald-600" />}
-                          {event.tracking_type === 'click' && <MousePointer className="w-4 h-4 text-amber-600" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-stone-900 truncate">{event.email}</div>
-                          <div className="text-xs text-stone-500">
-                            {event.tracking_type.charAt(0).toUpperCase() + event.tracking_type.slice(1)}
-                            {event.link_url && (() => {
-                              try {
-                                return <span className="text-stone-400"> • {new URL(event.link_url).hostname}</span>;
-                              } catch {
-                                return null;
-                              }
-                            })()}
+              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                {/* Header with filters */}
+                <div className="p-5 border-b border-stone-100">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-stone-900">Recent Activity</h3>
+                      <p className="text-sm text-stone-500 mt-0.5">
+                        {filteredEvents.length} {filterType === 'all' ? 'total' : filterType} event{filteredEvents.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setFilterType('all')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                          filterType === 'all'
+                            ? 'bg-stone-900 text-white'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setFilterType('open')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                          filterType === 'open'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Opens
+                      </button>
+                      <button
+                        onClick={() => setFilterType('click')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                          filterType === 'click'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        <MousePointer className="w-3.5 h-3.5" />
+                        Clicks
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Events List */}
+                {filteredEvents.length > 0 ? (
+                  <>
+                    <div className="divide-y divide-stone-100">
+                      {paginatedEvents.map((event, index) => (
+                        <div 
+                          key={event.id} 
+                          className="px-5 py-4 flex items-center gap-4 hover:bg-stone-50 transition-colors"
+                        >
+                          <div className="flex items-center justify-center w-8 text-sm font-medium text-stone-400">
+                            {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                          </div>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                            event.tracking_type === 'open' 
+                              ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200' 
+                              : event.tracking_type === 'click' 
+                                ? 'bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200' 
+                                : 'bg-stone-100 border border-stone-200'
+                          }`}>
+                            {event.tracking_type === 'open' && <Eye className="w-5 h-5 text-emerald-600" />}
+                            {event.tracking_type === 'click' && <MousePointer className="w-5 h-5 text-amber-600" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-stone-900 truncate">{event.email}</span>
+                              <Badge 
+                                variant={event.tracking_type === 'open' ? 'success' : 'warning'}
+                                className="flex-shrink-0"
+                              >
+                                {event.tracking_type === 'open' ? 'Opened' : 'Clicked'}
+                              </Badge>
+                            </div>
+                            {event.link_url && (
+                              <div className="text-xs text-stone-500 mt-1 truncate">
+                                {(() => {
+                                  try {
+                                    const url = new URL(event.link_url);
+                                    return (
+                                      <span className="flex items-center gap-1">
+                                        <MousePointer className="w-3 h-3" />
+                                        {url.hostname}{url.pathname !== '/' ? url.pathname : ''}
+                                      </span>
+                                    );
+                                  } catch {
+                                    return event.link_url;
+                                  }
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-sm text-stone-600">
+                              {new Date(event.created_at).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </div>
+                            <div className="text-xs text-stone-400">
+                              {new Date(event.created_at).toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-xs text-stone-400">
-                          {new Date(event.created_at).toLocaleString()}
+                      ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="px-5 py-4 border-t border-stone-100 bg-stone-50">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="text-sm text-stone-600">
+                            Showing <span className="font-medium">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to{' '}
+                            <span className="font-medium">
+                              {Math.min(currentPage * ITEMS_PER_PAGE, filteredEvents.length)}
+                            </span>{' '}
+                            of <span className="font-medium">{filteredEvents.length}</span> results
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setCurrentPage(1)}
+                              disabled={currentPage === 1}
+                              className="p-2 rounded-lg text-stone-600 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                              title="First page"
+                            >
+                              <ChevronsLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={currentPage === 1}
+                              className="p-2 rounded-lg text-stone-600 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                              title="Previous page"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            
+                            {/* Page numbers */}
+                            <div className="flex items-center gap-1 px-2">
+                              {(() => {
+                                const pages = [];
+                                const maxVisiblePages = 5;
+                                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                                
+                                if (endPage - startPage + 1 < maxVisiblePages) {
+                                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                                }
+                                
+                                for (let i = startPage; i <= endPage; i++) {
+                                  pages.push(
+                                    <button
+                                      key={i}
+                                      onClick={() => setCurrentPage(i)}
+                                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                        currentPage === i
+                                          ? 'bg-stone-900 text-white'
+                                          : 'text-stone-600 hover:bg-stone-200'
+                                      }`}
+                                    >
+                                      {i}
+                                    </button>
+                                  );
+                                }
+                                return pages;
+                              })()}
+                            </div>
+                            
+                            <button
+                              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                              disabled={currentPage === totalPages}
+                              className="p-2 rounded-lg text-stone-600 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                              title="Next page"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setCurrentPage(totalPages)}
+                              disabled={currentPage === totalPages}
+                              className="p-2 rounded-lg text-stone-600 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+                              title="Last page"
+                            >
+                              <ChevronsRight className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 ) : (
-                  <EmptyState
-                    icon={TrendingUp}
-                    title="No activity yet"
-                    description="Send a campaign to start tracking engagement"
-                  />
+                  <div className="p-8">
+                    <EmptyState
+                      icon={TrendingUp}
+                      title={filterType === 'all' ? 'No activity yet' : `No ${filterType}s yet`}
+                      description={filterType === 'all' 
+                        ? 'Send a campaign to start tracking engagement'
+                        : `No ${filterType} events recorded for this campaign`
+                      }
+                    />
+                  </div>
                 )}
-              </Card>
+              </div>
             </>
           ) : (
             <div className="bg-white border border-stone-200 rounded-xl p-8">
