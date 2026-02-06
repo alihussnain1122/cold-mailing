@@ -379,6 +379,16 @@ export default function SendEmails() {
                   </Button>
                 )}
               </div>
+
+              {/* Data Retention Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-700">
+                    <strong>Privacy:</strong> Campaign data auto-deletes 48 hours after completion
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">

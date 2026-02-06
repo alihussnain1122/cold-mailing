@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw, Clock } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
 import { smtpService } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -84,7 +84,7 @@ export default function Settings() {
 
     try {
       await smtpService.save(config);
-      setSuccess('Settings saved! Your SMTP settings are synced across all your devices.');
+      setSuccess('Settings saved successfully! Your SMTP configuration is securely stored and accessible from all your devices.');
       setConfigured(true);
     } catch (err) {
       console.error('Save error:', err);
@@ -306,9 +306,9 @@ export default function Settings() {
                 <div className="flex items-start gap-3">
                   <Cloud className="w-5 h-5 text-stone-600 mt-0.5" />
                   <div>
-                    <h4 className="font-medium text-stone-900 text-sm">Synced Across Devices</h4>
+                    <h4 className="font-medium text-stone-900 text-sm">Multi-Device Access</h4>
                     <p className="text-xs text-stone-600 mt-1">
-                      Your SMTP settings are securely stored in the cloud and synced across all your devices. 
+                      Your SMTP settings are securely stored in our servers and accessible from all your devices. 
                       Password is stored locally on each device for added security.
                     </p>
                   </div>
@@ -359,9 +359,22 @@ export default function Settings() {
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-stone-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-stone-900 text-sm">Security Note</h4>
+                <h4 className="font-medium text-stone-900 text-sm">Security & Privacy</h4>
                 <p className="text-xs text-stone-600 mt-1">
-                  Your SMTP host, port, and email are stored in Supabase. Your password is stored locally for each device.
+                  Your SMTP host, port, and email are securely stored in our encrypted database. Your password is stored locally on each device for maximum security.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Data Retention Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-900 text-sm">Auto Data Cleanup</h4>
+                <p className="text-xs text-blue-700 mt-1">
+                  Campaign data is automatically deleted 48 hours after completion for your privacy and security. Templates and contacts remain until you delete them manually.
                 </p>
               </div>
             </div>
