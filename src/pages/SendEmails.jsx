@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Play, 
   Pause, 
@@ -19,17 +19,27 @@ import {
 import { Card, Button, Alert, LoadingSpinner } from '../components/UI';
 import { useCampaign } from '../context/CampaignContext';
 import { templatesService, contactsService } from '../services/supabase';
-import { useAuth } from '../context/AuthContext';
 import { replaceVariables } from '../utils';
 
 export default function SendEmails() {
-  const { user } = useAuth();
   const { 
-    campaignState, 
     startCampaign, 
-    pauseCampaign, 
     resumeCampaign, 
     stopCampaign,
+    resetCampaign,
+    canResume,
+    // Campaign state spread
+    campaignId,
+    isRunning,
+    currentEmail,
+    progress,
+    total,
+    sent,
+    failed,
+    status,
+    error: campaignError,
+    nextEmailIn,
+    currentTemplate,
   } = useCampaign();
 
   const [templates, setTemplates] = useState([]);
@@ -47,12 +57,8 @@ export default function SendEmails() {
   const [showPreview, setShowPreview] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Load data
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  // Load data function
+  const loadData = useCallback(async () => {
     try {
       const [templatesData, contactsData] = await Promise.all([
         templatesService.getAll(),
@@ -62,15 +68,20 @@ export default function SendEmails() {
       setContacts(contactsData || []);
       
       // Auto-select first template
-      if (templatesData?.length > 0 && !selectedTemplate) {
-        setSelectedTemplate(templatesData[0]);
+      if (templatesData?.length > 0) {
+        setSelectedTemplate(prev => prev || templatesData[0]);
       }
     } catch (err) {
       setError('Failed to load data: ' + err.message);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Preview email with first contact's data
   const previewEmail = useMemo(() => {
@@ -97,10 +108,14 @@ export default function SendEmails() {
     setError('');
     
     try {
-      await startCampaign({
-        contacts,
+      // Attach template to each contact (as the context expects)
+      const contactsWithTemplate = contacts.map(contact => ({
+        ...contact,
         template: selectedTemplate,
-        delayMs: delaySeconds * 1000,
+      }));
+      
+      await startCampaign(contactsWithTemplate, {
+        delayMin: delaySeconds * 1000,
         campaignName: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
         enableTracking,
       });
@@ -110,13 +125,13 @@ export default function SendEmails() {
   }
 
   // Calculate progress percentage
-  const progressPercent = campaignState.total > 0 
-    ? Math.round((campaignState.sent + campaignState.failed) / campaignState.total * 100)
+  const progressPercent = total > 0 
+    ? Math.round((sent + failed) / total * 100)
     : 0;
 
   // Status color
   const getStatusColor = () => {
-    switch (campaignState.status) {
+    switch (status) {
       case 'running': return 'text-green-600';
       case 'paused': return 'text-amber-600';
       case 'completed': return 'text-blue-600';
@@ -227,7 +242,7 @@ export default function SendEmails() {
                   onChange={(e) => setCampaignName(e.target.value)}
                   placeholder={`Campaign ${new Date().toLocaleDateString()}`}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
-                  disabled={campaignState.isRunning}
+                  disabled={isRunning}
                 />
               </div>
 
@@ -244,7 +259,7 @@ export default function SendEmails() {
                     value={delaySeconds}
                     onChange={(e) => setDelaySeconds(Number(e.target.value))}
                     className="flex-1"
-                    disabled={campaignState.isRunning}
+                    disabled={isRunning}
                   />
                   <span className="text-sm font-medium text-stone-900 w-20">
                     {delaySeconds} seconds
@@ -273,7 +288,7 @@ export default function SendEmails() {
                       checked={enableTracking}
                       onChange={(e) => setEnableTracking(e.target.checked)}
                       className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-500"
-                      disabled={campaignState.isRunning}
+                      disabled={isRunning}
                     />
                     <span className="text-sm text-stone-700">Enable open & click tracking</span>
                   </label>
@@ -331,9 +346,9 @@ export default function SendEmails() {
             {/* Status Badge */}
             <div className="flex items-center gap-2 mb-4">
               <span className={`text-sm font-medium capitalize ${getStatusColor()}`}>
-                {campaignState.status}
+                {status}
               </span>
-              {campaignState.status === 'running' && (
+              {status === 'running' && (
                 <span className="flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
@@ -342,7 +357,7 @@ export default function SendEmails() {
             </div>
 
             {/* Progress */}
-            {campaignState.total > 0 && (
+            {total > 0 && (
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
                   <span className="text-stone-600">Progress</span>
@@ -365,7 +380,7 @@ export default function SendEmails() {
                   <span className="text-xs">Total</span>
                 </div>
                 <p className="text-xl font-bold text-stone-900">
-                  {campaignState.total || contacts.length}
+                  {total || contacts.length}
                 </p>
               </div>
               <div className="bg-green-50 p-3 rounded-lg">
@@ -373,39 +388,39 @@ export default function SendEmails() {
                   <CheckCircle className="w-4 h-4" />
                   <span className="text-xs">Sent</span>
                 </div>
-                <p className="text-xl font-bold text-green-700">{campaignState.sent}</p>
+                <p className="text-xl font-bold text-green-700">{sent}</p>
               </div>
               <div className="bg-red-50 p-3 rounded-lg">
                 <div className="flex items-center gap-2 text-red-600 mb-1">
                   <AlertCircle className="w-4 h-4" />
                   <span className="text-xs">Failed</span>
                 </div>
-                <p className="text-xl font-bold text-red-700">{campaignState.failed}</p>
+                <p className="text-xl font-bold text-red-700">{failed}</p>
               </div>
-              {campaignState.nextEmailIn > 0 && (
+              {nextEmailIn > 0 && (
                 <div className="bg-amber-50 p-3 rounded-lg">
                   <div className="flex items-center gap-2 text-amber-600 mb-1">
                     <Timer className="w-4 h-4" />
                     <span className="text-xs">Next in</span>
                   </div>
-                  <p className="text-xl font-bold text-amber-700">{campaignState.nextEmailIn}s</p>
+                  <p className="text-xl font-bold text-amber-700">{nextEmailIn}s</p>
                 </div>
               )}
             </div>
 
             {/* Current Email */}
-            {campaignState.currentEmail && (
+            {currentEmail && (
               <div className="mb-6 p-3 bg-stone-50 rounded-lg">
                 <p className="text-xs text-stone-500 mb-1">Sending to</p>
                 <p className="text-sm font-medium text-stone-900 truncate">
-                  {campaignState.currentEmail}
+                  {currentEmail}
                 </p>
               </div>
             )}
 
             {/* Action Buttons */}
             <div className="space-y-3">
-              {campaignState.status === 'idle' && (
+              {status === 'idle' && (
                 <Button
                   onClick={handleStartCampaign}
                   className="w-full"
@@ -416,33 +431,33 @@ export default function SendEmails() {
                 </Button>
               )}
 
-              {campaignState.status === 'running' && (
+              {status === 'running' && (
                 <div className="grid grid-cols-2 gap-3">
-                  <Button variant="secondary" onClick={pauseCampaign}>
+                  <Button variant="secondary" onClick={stopCampaign}>
                     <Pause className="w-4 h-4 mr-2" />
                     Pause
                   </Button>
-                  <Button variant="danger" onClick={stopCampaign}>
+                  <Button variant="danger" onClick={resetCampaign}>
                     <Square className="w-4 h-4 mr-2" />
                     Stop
                   </Button>
                 </div>
               )}
 
-              {campaignState.status === 'paused' && (
+              {status === 'paused' && (
                 <div className="grid grid-cols-2 gap-3">
                   <Button onClick={resumeCampaign}>
                     <Play className="w-4 h-4 mr-2" />
                     Resume
                   </Button>
-                  <Button variant="danger" onClick={stopCampaign}>
+                  <Button variant="danger" onClick={resetCampaign}>
                     <Square className="w-4 h-4 mr-2" />
                     Stop
                   </Button>
                 </div>
               )}
 
-              {(campaignState.status === 'completed' || campaignState.status === 'error') && (
+              {(status === 'completed' || status === 'error') && (
                 <Button
                   onClick={handleStartCampaign}
                   className="w-full"
@@ -455,9 +470,9 @@ export default function SendEmails() {
             </div>
 
             {/* Error Display */}
-            {campaignState.error && (
+            {campaignError && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">{campaignState.error}</p>
+                <p className="text-sm text-red-700">{campaignError}</p>
               </div>
             )}
           </Card>
