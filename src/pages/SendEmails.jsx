@@ -49,7 +49,8 @@ export default function SendEmails() {
   
   // Campaign settings
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [delaySeconds, setDelaySeconds] = useState(15);
+  const [delayMin, setDelayMin] = useState(10);
+  const [delayMax, setDelayMax] = useState(30);
   const [enableTracking, setEnableTracking] = useState(true);
   const [campaignName, setCampaignName] = useState('');
   
@@ -125,7 +126,8 @@ export default function SendEmails() {
       }));
       
       await startCampaign(contactsWithTemplate, {
-        delayMin: delaySeconds * 1000,
+        delayMin: delayMin * 1000,
+        delayMax: delayMax * 1000,
         campaignName: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
         enableTracking,
       });
@@ -138,6 +140,49 @@ export default function SendEmails() {
   const progressPercent = total > 0 
     ? Math.round((sent + failed) / total * 100)
     : 0;
+  
+  // Countdown timer for next email
+  const [countdown, setCountdown] = useState(0);
+  
+  useEffect(() => {
+    if (!isRunning || countdown <= 0) {
+      setCountdown(0);
+      return;
+    }
+    
+    const timer = setInterval(() => {
+      setCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [isRunning, countdown]);
+  
+  // Update countdown when a new email is about to be sent
+  useEffect(() => {
+    if (isRunning && sent + failed < total) {
+      // Set countdown to average of min/max delay when campaign starts or email sent
+      const avgDelay = Math.floor((delayMin + delayMax) / 2);
+      setCountdown(avgDelay);
+    }
+  }, [sent, isRunning]);
+  
+  // Calculate estimated time
+  const estimatedTime = useMemo(() => {
+    if (total === 0 || !isRunning) return null;
+    const remaining = total - (sent + failed);
+    if (remaining <= 0) return null;
+    
+    const avgDelay = (delayMin + delayMax) / 2;
+    const estimatedSeconds = Math.ceil(remaining * avgDelay);
+    
+    const hours = Math.floor(estimatedSeconds / 3600);
+    const minutes = Math.floor((estimatedSeconds % 3600) / 60);
+    const seconds = estimatedSeconds % 60;
+    
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }, [total, sent, failed, delayMin, delayMax, isRunning]);
 
   // Status color
   const getStatusColor = () => {
@@ -259,24 +304,41 @@ export default function SendEmails() {
               {/* Delay Setting */}
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">
-                  Delay Between Emails
+                  Random Delay Between Emails
                 </label>
                 <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="5"
-                    max="120"
-                    value={delaySeconds}
-                    onChange={(e) => setDelaySeconds(Number(e.target.value))}
-                    className="flex-1"
-                    disabled={isRunning}
-                  />
-                  <span className="text-sm font-medium text-stone-900 w-20">
-                    {delaySeconds} seconds
-                  </span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <span className="text-sm text-stone-600">Min:</span>
+                    <input
+                      type="number"
+                      min="5"
+                      max="300"
+                      value={delayMin}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (val <= delayMax) setDelayMin(val);
+                      }}
+                      className="w-20 px-2 py-1 border border-stone-300 rounded text-center"
+                      disabled={isRunning}
+                    />
+                    <span className="text-sm text-stone-600">Max:</span>
+                    <input
+                      type="number"
+                      min="5"
+                      max="300"
+                      value={delayMax}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (val >= delayMin) setDelayMax(val);
+                      }}
+                      className="w-20 px-2 py-1 border border-stone-300 rounded text-center"
+                      disabled={isRunning}
+                    />
+                    <span className="text-sm text-stone-600">seconds</span>
+                  </div>
                 </div>
                 <p className="text-xs text-stone-500 mt-1">
-                  Recommended: 15-30 seconds to avoid spam filters
+                  Recommended: 10-30 seconds for natural sending pattern
                 </p>
               </div>
 
@@ -407,13 +469,22 @@ export default function SendEmails() {
                 </div>
                 <p className="text-xl font-bold text-red-700">{failed}</p>
               </div>
-              {nextEmailIn > 0 && (
+              {isRunning && countdown > 0 && (
                 <div className="bg-amber-50 p-3 rounded-lg">
                   <div className="flex items-center gap-2 text-amber-600 mb-1">
                     <Timer className="w-4 h-4" />
                     <span className="text-xs">Next in</span>
                   </div>
-                  <p className="text-xl font-bold text-amber-700">{nextEmailIn}s</p>
+                  <p className="text-xl font-bold text-amber-700">{countdown}s</p>
+                </div>
+              )}
+              {isRunning && estimatedTime && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-600 mb-1">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-xs">Est. Time</span>
+                  </div>
+                  <p className="text-xl font-bold text-blue-700">{estimatedTime}</p>
                 </div>
               )}
             </div>
