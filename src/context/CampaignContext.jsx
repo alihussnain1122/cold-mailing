@@ -47,7 +47,8 @@ export const CampaignProvider = ({ children }) => {
     failed: 0,
     status: 'idle', // idle, running, paused, completed, error
     error: null,
-    nextEmailIn: 0,
+    nextEmailAt: null, // ISO timestamp of when next email will be sent
+    startedAt: null,   // Campaign start time for ETA calculation
     currentTemplate: null,
   });
 
@@ -98,6 +99,8 @@ export const CampaignProvider = ({ children }) => {
           currentTemplate: campaign.current_template || '',
           isRunning: newStatus === 'running',
           error: campaign.error_message,
+          nextEmailAt: campaign.next_email_at || null,
+          startedAt: campaign.started_at || prev.startedAt,
         }));
 
         // Send notifications on status changes
@@ -159,7 +162,8 @@ export const CampaignProvider = ({ children }) => {
           failed: campaign.failed_count || 0,
           status: campaign.status,
           error: campaign.error_message,
-          nextEmailIn: 0,
+          nextEmailAt: campaign.next_email_at || null,
+          startedAt: campaign.started_at || null,
           currentTemplate: campaign.current_template,
         });
       }
@@ -242,7 +246,8 @@ export const CampaignProvider = ({ children }) => {
         failed: 0,
         status: 'running',
         error: null,
-        nextEmailIn: 0,
+        nextEmailAt: null,
+        startedAt: new Date().toISOString(),
         currentTemplate: preparedContacts[0]?.template?.subject || '',
       });
 
@@ -370,7 +375,8 @@ export const CampaignProvider = ({ children }) => {
       failed: 0,
       status: 'idle',
       error: null,
-      nextEmailIn: 0,
+      nextEmailAt: null,
+      startedAt: null,
       currentTemplate: null,
     });
   }, [campaignState.campaignId]);

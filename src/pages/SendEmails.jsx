@@ -38,7 +38,8 @@ export default function SendEmails() {
     failed,
     status,
     error: campaignError,
-    nextEmailIn,
+    nextEmailAt,
+    startedAt,
     currentTemplate,
   } = useCampaign();
 
@@ -141,37 +142,54 @@ export default function SendEmails() {
     ? Math.round((sent + failed) / total * 100)
     : 0;
   
-  // Countdown timer for next email
+  // Real countdown timer based on server's next_email_at timestamp
   const [countdown, setCountdown] = useState(0);
   
   useEffect(() => {
-    if (!isRunning || countdown <= 0) {
+    if (!isRunning || !nextEmailAt) {
       setCountdown(0);
       return;
     }
     
-    const timer = setInterval(() => {
-      setCountdown(prev => Math.max(0, prev - 1));
-    }, 1000);
+    // Calculate countdown from server timestamp
+    const updateCountdown = () => {
+      const now = Date.now();
+      const target = new Date(nextEmailAt).getTime();
+      const remaining = Math.max(0, Math.ceil((target - now) / 1000));
+      setCountdown(remaining);
+    };
+    
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
     
     return () => clearInterval(timer);
-  }, [isRunning, countdown]);
+  }, [isRunning, nextEmailAt]);
   
-  // Update countdown when a new email is about to be sent
-  useEffect(() => {
-    if (isRunning && sent + failed < total) {
-      // Set countdown to average of min/max delay when campaign starts or email sent
-      const avgDelay = Math.floor((delayMin + delayMax) / 2);
-      setCountdown(avgDelay);
-    }
-  }, [sent, isRunning]);
-  
-  // Calculate estimated time
+  // Calculate real estimated time based on actual progress rate
   const estimatedTime = useMemo(() => {
-    if (total === 0 || !isRunning) return null;
+    if (total === 0 || !isRunning || !startedAt) return null;
     const remaining = total - (sent + failed);
     if (remaining <= 0) return null;
     
+    const emailsProcessed = sent + failed;
+    
+    // If we have progress data, calculate based on actual rate
+    if (emailsProcessed > 0) {
+      const elapsedMs = Date.now() - new Date(startedAt).getTime();
+      const msPerEmail = elapsedMs / emailsProcessed;
+      const estimatedMs = remaining * msPerEmail;
+      const estimatedSeconds = Math.ceil(estimatedMs / 1000);
+      
+      const hours = Math.floor(estimatedSeconds / 3600);
+      const minutes = Math.floor((estimatedSeconds % 3600) / 60);
+      const seconds = estimatedSeconds % 60;
+      
+      if (hours > 0) return `~${hours}h ${minutes}m`;
+      if (minutes > 0) return `~${minutes}m ${seconds}s`;
+      return `~${seconds}s`;
+    }
+    
+    // Fallback to estimate based on configured delay
     const avgDelay = (delayMin + delayMax) / 2;
     const estimatedSeconds = Math.ceil(remaining * avgDelay);
     
@@ -179,10 +197,10 @@ export default function SendEmails() {
     const minutes = Math.floor((estimatedSeconds % 3600) / 60);
     const seconds = estimatedSeconds % 60;
     
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  }, [total, sent, failed, delayMin, delayMax, isRunning]);
+    if (hours > 0) return `~${hours}h ${minutes}m`;
+    if (minutes > 0) return `~${minutes}m ${seconds}s`;
+    return `~${seconds}s`;
+  }, [total, sent, failed, startedAt, delayMin, delayMax, isRunning]);
 
   // Status color
   const getStatusColor = () => {
