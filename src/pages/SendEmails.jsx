@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -15,10 +15,12 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, Button, Alert, LoadingSpinner } from '../components/UI';
 import { useCampaign } from '../context/CampaignContext';
-import { templatesService, contactsService } from '../services/supabase';
+import { templatesService, contactsService, campaignService } from '../services/supabase';
 import { replaceVariables, validateContactEmails } from '../utils';
 
 export default function SendEmails() {
@@ -58,6 +60,8 @@ export default function SendEmails() {
   // UI state
   const [showPreview, setShowPreview] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFailedEmails, setShowFailedEmails] = useState(false);
+  const [failedEmails, setFailedEmails] = useState([]);
 
   // Load data function
   const loadData = useCallback(async () => {
@@ -84,6 +88,23 @@ export default function SendEmails() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Load failed emails when campaign has failures
+  useEffect(() => {
+    const loadFailedEmails = async () => {
+      if (campaignId && failed > 0) {
+        try {
+          const failedData = await campaignService.getFailedEmails(campaignId);
+          setFailedEmails(failedData);
+        } catch (err) {
+          console.error('Failed to load failed emails:', err);
+        }
+      } else {
+        setFailedEmails([]);
+      }
+    };
+    loadFailedEmails();
+  }, [campaignId, failed]);
 
   // Preview email with first contact's data (using first selected template)
   const previewEmail = useMemo(() => {
@@ -147,10 +168,14 @@ export default function SendEmails() {
   
   // Real countdown timer based on server's next_email_at timestamp
   const [countdown, setCountdown] = useState(0);
+  const [chosenDelay, setChosenDelay] = useState(0); // The randomly chosen delay
+  const prevNextEmailAtRef = useRef(null);
   
   useEffect(() => {
     if (!isRunning || !nextEmailAt) {
       setCountdown(0);
+      setChosenDelay(0);
+      prevNextEmailAtRef.current = null;
       return;
     }
     
@@ -161,6 +186,15 @@ export default function SendEmails() {
       const remaining = Math.max(0, Math.ceil((target - now) / 1000));
       setCountdown(remaining);
     };
+    
+    // When nextEmailAt changes, capture the initial delay (the randomly chosen one)
+    if (nextEmailAt !== prevNextEmailAtRef.current) {
+      const now = Date.now();
+      const target = new Date(nextEmailAt).getTime();
+      const initialDelay = Math.max(0, Math.ceil((target - now) / 1000));
+      setChosenDelay(initialDelay);
+      prevNextEmailAtRef.current = nextEmailAt;
+    }
     
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
@@ -536,12 +570,23 @@ export default function SendEmails() {
                 </div>
                 <p className="text-xl font-bold text-green-700">{sent}</p>
               </div>
-              <div className="bg-red-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2 text-red-600 mb-1">
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="text-xs">Failed</span>
+              <div 
+                className={`bg-red-50 p-3 rounded-lg ${failed > 0 ? 'cursor-pointer hover:bg-red-100 transition-colors' : ''}`}
+                onClick={() => failed > 0 && setShowFailedEmails(!showFailedEmails)}
+              >
+                <div className="flex items-center justify-between text-red-600 mb-1">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-xs">Failed</span>
+                  </div>
+                  {failed > 0 && (
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showFailedEmails ? 'rotate-180' : ''}`} />
+                  )}
                 </div>
                 <p className="text-xl font-bold text-red-700">{failed}</p>
+                {failed > 0 && (
+                  <p className="text-xs text-red-600 mt-1">Click to view</p>
+                )}
               </div>
               {isRunning && countdown > 0 && (
                 <div className="bg-amber-50 p-3 rounded-lg">
@@ -549,7 +594,12 @@ export default function SendEmails() {
                     <Timer className="w-4 h-4" />
                     <span className="text-xs">Next in</span>
                   </div>
-                  <p className="text-xl font-bold text-amber-700">{countdown}s</p>
+                  <p className="text-xl font-bold text-amber-700">
+                    {countdown}s
+                    {chosenDelay > 0 && (
+                      <span className="text-xs font-normal text-amber-600 ml-1">/ {chosenDelay}s</span>
+                    )}
+                  </p>
                 </div>
               )}
               {isRunning && estimatedTime && (
@@ -562,6 +612,62 @@ export default function SendEmails() {
                 </div>
               )}
             </div>
+
+            {/* Failed Emails List */}
+            {showFailedEmails && failedEmails.length > 0 && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-red-800">Failed Contacts</h4>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const emails = failedEmails.map(f => f.contact_email).join(', ');
+                      navigator.clipboard.writeText(emails);
+                    }}
+                    className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 transition-colors"
+                    title="Copy all failed emails"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy All
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {failedEmails.map((email, index) => (
+                    <div 
+                      key={email.id || index}
+                      className="flex items-start justify-between p-2 bg-white rounded border border-red-100"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-stone-900 truncate">
+                          {email.contact_email}
+                        </p>
+                        {email.contact_name && (
+                          <p className="text-xs text-stone-500">{email.contact_name}</p>
+                        )}
+                        {email.error_message && (
+                          <p className="text-xs text-red-600 mt-1 truncate" title={email.error_message}>
+                            Error: {email.error_message}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(email.contact_email);
+                        }}
+                        className="ml-2 p-1 text-stone-400 hover:text-stone-600 transition-colors"
+                        title="Copy email"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-red-600 mt-3">
+                  Tip: Copy these emails and add them back to your contacts to retry sending.
+                </p>
+              </div>
+            )}
 
             {/* Current Email */}
             {currentEmail && (

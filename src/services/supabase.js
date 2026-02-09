@@ -449,6 +449,19 @@ const { data: { session } } = await supabase.auth.getSession();
     return data || [];
   },
 
+  // Get failed emails for a campaign
+  async getFailedEmails(campaignId) {
+    const { data, error } = await supabase
+      .from('campaign_emails')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('status', 'failed')
+      .order('sort_order', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
   // Get all emails for a campaign
   async getCampaignEmails(campaignId) {
     const { data, error } = await supabase
