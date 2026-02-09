@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Wand2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, Upload, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, Wand2, Loader2, Check } from 'lucide-react';
 import { Card, Button, Input, TextArea, Modal, Alert, ConfirmDialog, PageLoader, DuplicateDialog } from '../components/UI';
 import { templatesService } from '../services/supabase';
 import { aiAPI } from '../services/api';
@@ -17,6 +17,7 @@ export default function Templates() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -162,6 +163,37 @@ export default function Templates() {
       setDeleting(null);
       setDeleteConfirm({ open: false, id: null });
     }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedIds.length === 0) return;
+    
+    setDeleting('bulk');
+    try {
+      await Promise.all(selectedIds.map(id => templatesService.delete(id)));
+      await loadTemplates();
+      setSuccess(`Deleted ${selectedIds.length} template${selectedIds.length !== 1 ? 's' : ''}`);
+      setSelectedIds([]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(null);
+      setDeleteConfirm({ open: false, id: null });
+    }
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === paginatedTemplates.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedTemplates.map(t => t.id));
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   }
 
   async function handleDeleteAll() {
@@ -405,7 +437,14 @@ export default function Templates() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-stone-900">Email Templates</h2>
-          <p className="text-stone-500 mt-1">Create and manage your email templates</p>
+          <p className="text-stone-500 mt-1">
+            {selectedIds.length > 0 
+              ? `${selectedIds.length} selected` 
+              : templates.length > 0 
+                ? `${templates.length} template${templates.length !== 1 ? 's' : ''}` 
+                : 'Create and manage your email templates'
+            }
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
           <input 
@@ -416,7 +455,14 @@ export default function Templates() {
             className="hidden"
             aria-label="Import templates CSV or JSON file"
           />
-          {templates.length > 0 && (
+          {selectedIds.length > 0 && (
+            <Button variant="danger" size="sm" onClick={() => setDeleteConfirm({ open: true, id: 'selected' })} loading={deleting === 'bulk'}>
+              <Trash2 className="w-4 h-4 sm:mr-2" aria-hidden="true" />
+              <span className="hidden sm:inline">Delete Selected ({selectedIds.length})</span>
+              <span className="sm:hidden">Delete ({selectedIds.length})</span>
+            </Button>
+          )}
+          {templates.length > 0 && selectedIds.length === 0 && (
             <Button variant="danger" size="sm" onClick={() => setDeleteAllConfirm(true)} loading={deletingAll}>
               <Trash2 className="w-4 h-4 sm:mr-2" aria-hidden="true" />
               <span className="hidden sm:inline">Delete All</span>
@@ -491,25 +537,51 @@ export default function Templates() {
         </Card>
       ) : (
         <>
+          <div className="mb-4 flex items-center gap-3 bg-stone-50 rounded-lg p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === paginatedTemplates.length && paginatedTemplates.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-2 focus:ring-stone-500"
+                />
+              </div>
+              <span className="text-sm text-stone-600 font-medium">Select All on Page</span>
+            </label>
+          </div>
+
           <div className="grid gap-4" role="list" aria-label="Email templates">
             {paginatedTemplates.map((template, index) => {
               const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+              const isSelected = selectedIds.includes(template.id);
               return (
-                <Card key={template.id} role="listitem">
+                <Card key={template.id} role="listitem" className={isSelected ? 'ring-2 ring-stone-900' : ''}>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs text-stone-400">#{globalIndex}</span>
-                        {template.name && (
-                          <span className="text-xs font-medium text-stone-500">{template.name}</span>
-                        )}
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="pt-1">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(template.id)}
+                          className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-2 focus:ring-stone-500"
+                          aria-label={`Select template: ${template.subject}`}
+                        />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-stone-900 break-words">
-                        {template.subject}
-                      </h3>
-                      <p className="text-stone-500 text-sm line-clamp-2 mt-1">
-                        {template.body.substring(0, 200)}...
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-stone-400">#{globalIndex}</span>
+                          {template.name && (
+                            <span className="text-xs font-medium text-stone-500">{template.name}</span>
+                          )}
+                        </div>
+                        <h3 className="text-base sm:text-lg font-semibold text-stone-900 break-words">
+                          {template.subject}
+                        </h3>
+                        <p className="text-stone-500 text-sm line-clamp-2 mt-1">
+                          {template.body.substring(0, 200)}...
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 sm:gap-2 sm:ml-4 border-t sm:border-t-0 pt-3 sm:pt-0">
                       <button
@@ -525,14 +597,6 @@ export default function Templates() {
                         aria-label={`Edit template: ${template.subject}`}
                       >
                         <Edit className="w-5 h-5 mx-auto" aria-hidden="true" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ open: true, id: template.id })}
-                        disabled={deleting === template.id}
-                        className="flex-1 sm:flex-none p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                        aria-label={`Delete template: ${template.subject}`}
-                      >
-                        <Trash2 className="w-5 h-5 mx-auto" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -661,9 +725,12 @@ export default function Templates() {
       <ConfirmDialog
         isOpen={deleteConfirm.open}
         onClose={() => setDeleteConfirm({ open: false, id: null })}
-        onConfirm={() => handleDelete(deleteConfirm.id)}
-        title="Delete Template"
-        message="Are you sure you want to delete this template? This action cannot be undone."
+        onConfirm={() => deleteConfirm.id === 'selected' ? handleDeleteSelected() : handleDelete(deleteConfirm.id)}
+        title={deleteConfirm.id === 'selected' ? 'Delete Selected Templates' : 'Delete Template'}
+        message={deleteConfirm.id === 'selected' 
+          ? `Are you sure you want to delete ${selectedIds.length} selected template${selectedIds.length !== 1 ? 's' : ''}? This action cannot be undone.`
+          : 'Are you sure you want to delete this template? This action cannot be undone.'
+        }
         confirmText="Delete"
         variant="danger"
       />
