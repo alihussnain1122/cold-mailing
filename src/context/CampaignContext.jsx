@@ -39,6 +39,7 @@ export const CampaignProvider = ({ children }) => {
   
   const [campaignState, setCampaignState] = useState({
     campaignId: null,
+    campaignName: null,
     isRunning: false,
     currentEmail: '',
     progress: 0,
@@ -154,6 +155,7 @@ export const CampaignProvider = ({ children }) => {
         log('Found active campaign:', campaign);
         setCampaignState({
           campaignId: campaign.id,
+          campaignName: campaign.name || null,
           isRunning: campaign.status === 'running',
           currentEmail: campaign.current_email || '',
           progress: (campaign.sent_count || 0) + (campaign.failed_count || 0),
@@ -238,6 +240,7 @@ export const CampaignProvider = ({ children }) => {
 
       setCampaignState({
         campaignId: response.campaignId,
+        campaignName: config.campaignName || `Campaign ${new Date().toLocaleDateString()}`,
         isRunning: true,
         currentEmail: '',
         progress: 0,
@@ -268,10 +271,19 @@ export const CampaignProvider = ({ children }) => {
    * Resume a paused campaign
    */
   const resumeCampaign = useCallback(async () => {
-    const { campaignId } = campaignState;
+    const { campaignId, status } = campaignState;
     
     if (!campaignId) {
       log('No campaign to resume');
+      return;
+    }
+
+    if (status !== 'paused') {
+      log('Campaign is not paused, current status:', status);
+      setCampaignState(prev => ({
+        ...prev,
+        error: `Campaign is ${status}, cannot resume`,
+      }));
       return;
     }
 
@@ -288,6 +300,7 @@ export const CampaignProvider = ({ children }) => {
         ...prev,
         isRunning: true,
         status: 'running',
+        error: null,
       }));
 
       log('Campaign resumed successfully');
@@ -300,13 +313,13 @@ export const CampaignProvider = ({ children }) => {
         error: err.message,
       }));
     }
-  }, [campaignState.campaignId]);
+  }, [campaignState]);
 
   /**
-   * Pause the running campaign - rewritten for reliability
+   * Pause the running campaign
    */
   const stopCampaign = useCallback(async () => {
-    const { campaignId, sent, total } = campaignState;
+    const { campaignId, sent, total, status } = campaignState;
     
     if (!campaignId) {
       log('No campaign to pause');
@@ -317,38 +330,18 @@ export const CampaignProvider = ({ children }) => {
       return;
     }
 
+    if (status !== 'running') {
+      log('Campaign is not running, current status:', status);
+      setCampaignState(prev => ({
+        ...prev,
+        error: status === 'paused' ? 'Campaign is already paused' : `Campaign is ${status}, cannot pause`,
+      }));
+      return;
+    }
+
     log('Pausing campaign:', campaignId);
-    
-    // Set a temporary "pausing" state for UI feedback
-    setCampaignState(prev => ({
-      ...prev,
-      error: null,
-    }));
 
     try {
-      // First, get the actual status from the database to ensure sync
-      const currentCampaign = await campaignService.getById(campaignId);
-      log('Current campaign status from DB:', currentCampaign?.status);
-      
-      if (!currentCampaign) {
-        throw new Error('Campaign not found');
-      }
-      
-      // Allow pause if running OR if we think it might be running
-      if (currentCampaign.status !== 'running') {
-        // Update local state to match database
-        setCampaignState(prev => ({
-          ...prev,
-          status: currentCampaign.status,
-          isRunning: currentCampaign.status === 'running',
-          error: currentCampaign.status === 'paused' 
-            ? 'Campaign is already paused' 
-            : `Campaign is ${currentCampaign.status}, cannot pause`,
-        }));
-        return;
-      }
-
-      // Now actually pause it
       const response = await campaignAPI.pause(campaignId);
 
       if (!response.success) {
@@ -374,7 +367,7 @@ export const CampaignProvider = ({ children }) => {
         error: `Pause failed: ${err.message}`,
       }));
     }
-  }, [campaignState.campaignId, campaignState.sent, campaignState.total]);
+  }, [campaignState]);
 
   /**
    * Reset campaign state (delete and start fresh)
@@ -401,6 +394,7 @@ export const CampaignProvider = ({ children }) => {
 
     setCampaignState({
       campaignId: null,
+      campaignName: null,
       isRunning: false,
       currentEmail: '',
       progress: 0,
@@ -413,7 +407,7 @@ export const CampaignProvider = ({ children }) => {
       startedAt: null,
       currentTemplate: null,
     });
-  }, [campaignState.campaignId]);
+  }, [campaignState]);
 
   // Check if there's a paused campaign that can be resumed
   const canResume = campaignState.status === 'paused' && campaignState.campaignId !== null;

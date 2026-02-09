@@ -35,6 +35,11 @@ async function getAuthToken() {
 
 // Generic fetch wrapper with error handling and auth
 async function fetchAPI(url, options = {}) {
+  // Check internet connection first
+  if (!navigator.onLine) {
+    throw new NetworkError('No internet connection. Please check your network and try again.');
+  }
+
   try {
     // Get auth token
     const token = await getAuthToken();
@@ -74,7 +79,11 @@ async function fetchAPI(url, options = {}) {
     // Network errors (no internet, CORS, etc.)
     if (error instanceof TypeError) {
       if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
-        throw new NetworkError('Cannot connect to server. Check if VITE_API_URL is configured correctly for production.');
+        // Check if it's actually an offline issue
+        if (!navigator.onLine) {
+          throw new NetworkError('No internet connection. Please check your network and try again.');
+        }
+        throw new NetworkError('Cannot connect to server. Please check your internet connection or try again later.');
       }
     }
     throw error;
@@ -296,7 +305,8 @@ export const campaignAPI = {
           senderName: creds.senderName,
         },
         senderName: options.senderName || creds.senderName,
-        delayMs: options.delayMs || 15000,
+        delayMin: options.delayMin || 10000,
+        delayMax: options.delayMax || 30000,
         campaignName: options.campaignName,
         enableTracking: options.enableTracking !== false,
       }),

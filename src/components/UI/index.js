@@ -10,4 +10,5 @@ export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as OnboardingWizard } from './OnboardingWizard';
 export { default as EmptyState } from './EmptyState';
 export { default as DuplicateDialog } from './DuplicateDialog';
+export { default as OfflineIndicator } from './OfflineIndicator';
 export { useMarkTestEmailSent, useMarkFirstCampaignSent } from '../../hooks/useOnboarding';
