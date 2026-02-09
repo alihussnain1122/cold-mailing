@@ -49,7 +49,7 @@ export default function SendEmails() {
   const [error, setError] = useState('');
   
   // Campaign settings
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [delayMin, setDelayMin] = useState(10);
   const [delayMax, setDelayMax] = useState(30);
   const [enableTracking, setEnableTracking] = useState(true);
@@ -69,9 +69,9 @@ export default function SendEmails() {
       setTemplates(templatesData || []);
       setContacts(contactsData || []);
       
-      // Auto-select first template
+      // Auto-select all templates for rotation
       if (templatesData?.length > 0) {
-        setSelectedTemplate(prev => prev || templatesData[0]);
+        setSelectedTemplates(prev => prev.length > 0 ? prev : templatesData);
       }
     } catch (err) {
       setError('Failed to load data: ' + err.message);
@@ -85,21 +85,22 @@ export default function SendEmails() {
     loadData();
   }, [loadData]);
 
-  // Preview email with first contact's data
+  // Preview email with first contact's data (using first selected template)
   const previewEmail = useMemo(() => {
-    if (!selectedTemplate || contacts.length === 0) return null;
+    if (selectedTemplates.length === 0 || contacts.length === 0) return null;
     
     const sampleContact = contacts[0];
+    const firstTemplate = selectedTemplates[0];
     return {
-      subject: replaceVariables(selectedTemplate.subject, sampleContact),
-      body: replaceVariables(selectedTemplate.body, sampleContact),
+      subject: replaceVariables(firstTemplate.subject, sampleContact),
+      body: replaceVariables(firstTemplate.body, sampleContact),
     };
-  }, [selectedTemplate, contacts]);
+  }, [selectedTemplates, contacts]);
 
   // Handle campaign start
   async function handleStartCampaign() {
-    if (!selectedTemplate) {
-      setError('Please select a template');
+    if (selectedTemplates.length === 0) {
+      setError('Please select at least one template');
       return;
     }
     if (contacts.length === 0) {
@@ -120,10 +121,12 @@ export default function SendEmails() {
     setError('');
     
     try {
-      // Attach template to each contact (as the context expects)
-      const contactsWithTemplate = validation.valid.map(contact => ({
+      // Attach templates to contacts rotationally
+      // If 5 templates and 47 contacts: templates rotate (1,2,3,4,5,1,2,3,4,5,...)
+      // If 5 templates and 3 contacts: only first 3 templates are used
+      const contactsWithTemplate = validation.valid.map((contact, index) => ({
         ...contact,
-        template: selectedTemplate,
+        template: selectedTemplates[index % selectedTemplates.length],
       }));
       
       await startCampaign(contactsWithTemplate, {
@@ -251,10 +254,47 @@ export default function SendEmails() {
         <div className="lg:col-span-2 space-y-6">
           {/* Template Selection */}
           <Card>
-            <h3 className="text-lg font-semibold text-stone-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-stone-600" />
-              Select Template
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-stone-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-stone-600" />
+                Select Templates
+              </h3>
+              {templates.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedTemplates(templates)}
+                    className="text-xs text-stone-600 hover:text-stone-900 underline"
+                    disabled={isRunning}
+                  >
+                    Select All
+                  </button>
+                  <span className="text-stone-300">|</span>
+                  <button
+                    onClick={() => setSelectedTemplates([])}
+                    className="text-xs text-stone-600 hover:text-stone-900 underline"
+                    disabled={isRunning}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Rotation Info */}
+            {selectedTemplates.length > 0 && contacts.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-blue-700">
+                    <strong>{selectedTemplates.length}</strong> template{selectedTemplates.length !== 1 ? 's' : ''} will be rotated across <strong>{contacts.length}</strong> contact{contacts.length !== 1 ? 's' : ''}.
+                    {contacts.length >= selectedTemplates.length 
+                      ? ` Each template will be used ~${Math.floor(contacts.length / selectedTemplates.length)} time${Math.floor(contacts.length / selectedTemplates.length) !== 1 ? 's' : ''}.`
+                      : ` Only ${contacts.length} of ${selectedTemplates.length} templates will be used.`
+                    }
+                  </p>
+                </div>
+              </div>
+            )}
             
             {templates.length === 0 ? (
               <div className="text-center py-8 text-stone-500">
@@ -264,34 +304,50 @@ export default function SendEmails() {
               </div>
             ) : (
               <div className="space-y-3">
-                {templates.slice(0, 5).map((template) => (
-                  <div
-                    key={template.id}
-                    onClick={() => setSelectedTemplate(template)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      selectedTemplate?.id === template.id
-                        ? 'border-stone-900 bg-stone-50 ring-1 ring-stone-900'
-                        : 'border-stone-200 hover:border-stone-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-stone-900">{template.name}</h4>
-                        <p className="text-sm text-stone-500 mt-1 truncate max-w-md">
-                          {template.subject}
-                        </p>
+                {templates.map((template) => {
+                  const isSelected = selectedTemplates.some(t => t.id === template.id);
+                  const toggleTemplate = () => {
+                    if (isRunning) return;
+                    if (isSelected) {
+                      setSelectedTemplates(prev => prev.filter(t => t.id !== template.id));
+                    } else {
+                      setSelectedTemplates(prev => [...prev, template]);
+                    }
+                  };
+                  return (
+                    <div
+                      key={template.id}
+                      onClick={toggleTemplate}
+                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-stone-900 bg-stone-50 ring-1 ring-stone-900'
+                          : 'border-stone-200 hover:border-stone-300'
+                      } ${isRunning ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={toggleTemplate}
+                            className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-500"
+                            disabled={isRunning}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div>
+                            <h4 className="font-medium text-stone-900">{template.name}</h4>
+                            <p className="text-sm text-stone-500 mt-1 truncate max-w-md">
+                              {template.subject}
+                            </p>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle className="w-5 h-5 text-stone-900" />
+                        )}
                       </div>
-                      {selectedTemplate?.id === template.id && (
-                        <CheckCircle className="w-5 h-5 text-stone-900" />
-                      )}
                     </div>
-                  </div>
-                ))}
-                {templates.length > 5 && (
-                  <p className="text-sm text-stone-500 text-center">
-                    +{templates.length - 5} more templates available
-                  </p>
-                )}
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -356,7 +412,7 @@ export default function SendEmails() {
                   </div>
                 </div>
                 <p className="text-xs text-stone-500 mt-1">
-                  Recommended: 10-30 seconds for natural sending pattern
+                  Recommended: 10-50 seconds for natural sending pattern
                 </p>
               </div>
 
@@ -388,7 +444,7 @@ export default function SendEmails() {
           </Card>
 
           {/* Email Preview */}
-          {selectedTemplate && (
+          {selectedTemplates.length > 0 && (
             <Card>
               <button
                 onClick={() => setShowPreview(!showPreview)}
@@ -523,7 +579,7 @@ export default function SendEmails() {
                 <Button
                   onClick={handleStartCampaign}
                   className="w-full"
-                  disabled={!selectedTemplate || contacts.length === 0}
+                  disabled={selectedTemplates.length === 0 || contacts.length === 0}
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Start Campaign
@@ -560,7 +616,7 @@ export default function SendEmails() {
                 <Button
                   onClick={handleStartCampaign}
                   className="w-full"
-                  disabled={!selectedTemplate || contacts.length === 0}
+                  disabled={selectedTemplates.length === 0 || contacts.length === 0}
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Start New Campaign
