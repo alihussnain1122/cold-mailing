@@ -288,9 +288,9 @@ export const smtpService = {
 // CAMPAIGNS - Synced across devices
 // ==================
 export const campaignService = {
-  // Get all campaigns for analytics
+  // Get recent campaigns for analytics (max 7, all statuses)
   async getAll() {
-const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
       return [];
@@ -299,7 +299,8 @@ const { data: { session } } = await supabase.auth.getSession();
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(7); // Show max 7 recent campaigns
     
     if (error) {
       throw error;

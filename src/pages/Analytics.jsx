@@ -158,11 +158,16 @@ export default function Analytics() {
                     {campaigns.map((campaign) => {
                       const date = new Date(campaign.created_at);
                       const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                      const status = campaign.sent_count === campaign.total_contacts ? '✓' : '•';
+                      const totalEmails = campaign.total_emails || campaign.total_contacts || 0;
+                      const statusIcon = campaign.status === 'completed' ? '✓' 
+                        : campaign.status === 'running' ? '▶' 
+                        : campaign.status === 'paused' ? '⏸' 
+                        : campaign.status === 'error' ? '✗' 
+                        : '•';
                       const name = campaign.name || 'Unnamed Campaign';
                       return (
                         <option key={campaign.id} value={campaign.id}>
-                          {name} - {formattedDate} {status} {campaign.sent_count}/{campaign.total_contacts || campaign.total_emails} sent
+                          {statusIcon} {name} - {formattedDate} ({campaign.sent_count}/{totalEmails})
                         </option>
                       );
                     })}
@@ -178,11 +183,21 @@ export default function Analytics() {
                         {currentCampaign.name || 'Unnamed Campaign'}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        currentCampaign.sent_count === (currentCampaign.total_contacts || currentCampaign.total_emails)
+                        currentCampaign.status === 'completed'
                           ? 'bg-emerald-100 text-emerald-700' 
-                          : 'bg-amber-100 text-amber-700'
+                          : currentCampaign.status === 'running'
+                          ? 'bg-blue-100 text-blue-700'
+                          : currentCampaign.status === 'paused'
+                          ? 'bg-amber-100 text-amber-700'
+                          : currentCampaign.status === 'error'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-stone-100 text-stone-700'
                       }`}>
-                        {currentCampaign.sent_count === (currentCampaign.total_contacts || currentCampaign.total_emails) ? 'Completed' : 'In Progress'}
+                        {currentCampaign.status === 'completed' ? 'Completed' 
+                          : currentCampaign.status === 'running' ? 'Running' 
+                          : currentCampaign.status === 'paused' ? 'Paused' 
+                          : currentCampaign.status === 'error' ? 'Error' 
+                          : 'Unknown'}
                       </span>
                     </div>
                     <div className="text-xs text-stone-500 mt-1">
