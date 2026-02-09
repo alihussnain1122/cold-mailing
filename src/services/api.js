@@ -60,6 +60,9 @@ async function fetchAPI(url, options = {}) {
       if (response.status === 401) {
         throw new AuthError(data.error || 'Authentication required');
       }
+      if (response.status === 403 && data.error?.includes('CORS')) {
+        throw new NetworkError('CORS error - backend may not be configured for this domain');
+      }
       if (response.status >= 500) {
         throw new ServerError(data.error || 'Server error', response.status);
       }
@@ -69,8 +72,10 @@ async function fetchAPI(url, options = {}) {
     return data;
   } catch (error) {
     // Network errors (no internet, CORS, etc.)
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new NetworkError();
+    if (error instanceof TypeError) {
+      if (error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+        throw new NetworkError('Cannot connect to server. Check if VITE_API_URL is configured correctly for production.');
+      }
     }
     throw error;
   }

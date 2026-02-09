@@ -159,9 +159,10 @@ export default function Analytics() {
                       const date = new Date(campaign.created_at);
                       const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                       const status = campaign.sent_count === campaign.total_contacts ? '✓' : '•';
+                      const name = campaign.name || 'Unnamed Campaign';
                       return (
                         <option key={campaign.id} value={campaign.id}>
-                          {formattedDate} {status} {campaign.sent_count}/{campaign.total_contacts} sent
+                          {name} - {formattedDate} {status} {campaign.sent_count}/{campaign.total_contacts || campaign.total_emails} sent
                         </option>
                       );
                     })}
@@ -174,22 +175,22 @@ export default function Analytics() {
                   <div className="mt-3 p-3 bg-stone-50 rounded-lg border border-stone-100">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-stone-900">
-                        {new Date(currentCampaign.created_at).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
+                        {currentCampaign.name || 'Unnamed Campaign'}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        currentCampaign.sent_count === currentCampaign.total_contacts
+                        currentCampaign.sent_count === (currentCampaign.total_contacts || currentCampaign.total_emails)
                           ? 'bg-emerald-100 text-emerald-700' 
                           : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {currentCampaign.sent_count === currentCampaign.total_contacts ? 'Completed' : 'In Progress'}
+                        {currentCampaign.sent_count === (currentCampaign.total_contacts || currentCampaign.total_emails) ? 'Completed' : 'In Progress'}
                       </span>
                     </div>
                     <div className="text-xs text-stone-500 mt-1">
-                      {currentCampaign.sent_count} of {currentCampaign.total_contacts} emails sent
+                      {currentCampaign.sent_count} of {currentCampaign.total_contacts || currentCampaign.total_emails} emails sent • {new Date(currentCampaign.created_at).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
                     </div>
                   </div>
                 )}

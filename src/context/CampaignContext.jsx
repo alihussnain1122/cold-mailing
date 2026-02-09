@@ -306,10 +306,23 @@ export const CampaignProvider = ({ children }) => {
    * Pause the running campaign
    */
   const stopCampaign = useCallback(async () => {
-    const { campaignId, sent, total } = campaignState;
+    const { campaignId, sent, total, status } = campaignState;
     
     if (!campaignId) {
       log('No campaign to pause');
+      setCampaignState(prev => ({
+        ...prev,
+        error: 'No active campaign to pause',
+      }));
+      return;
+    }
+
+    if (status !== 'running') {
+      log('Campaign is not running, cannot pause');
+      setCampaignState(prev => ({
+        ...prev,
+        error: `Cannot pause: campaign is ${status}`,
+      }));
       return;
     }
 
@@ -329,6 +342,7 @@ export const CampaignProvider = ({ children }) => {
         ...prev,
         isRunning: false,
         status: 'paused',
+        error: null, // Clear any previous error
       }));
 
       log('Campaign paused successfully');
@@ -337,10 +351,10 @@ export const CampaignProvider = ({ children }) => {
       log('Failed to pause campaign:', err);
       setCampaignState(prev => ({
         ...prev,
-        error: err.message,
+        error: `Pause failed: ${err.message}`,
       }));
     }
-  }, [campaignState.campaignId, campaignState.sent, campaignState.total]);
+  }, [campaignState.campaignId, campaignState.sent, campaignState.total, campaignState.status]);
 
   /**
    * Reset campaign state (delete and start fresh)

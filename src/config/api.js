@@ -5,6 +5,16 @@
 const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
 export const API_BASE_URL = baseUrl;
 
+// Log API URL in development for debugging
+if (import.meta.env.DEV) {
+  console.log('[API Config] Using API URL:', API_BASE_URL);
+}
+
+// Warn if using localhost in production
+if (!import.meta.env.DEV && API_BASE_URL.includes('localhost')) {
+  console.warn('⚠️ WARNING: Using localhost API URL in production! Set VITE_API_URL environment variable.');
+}
+
 export const API_ENDPOINTS = {
   // Config
   CONFIG: `${API_BASE_URL}/api/config`,
