@@ -280,11 +280,7 @@ export const CampaignProvider = ({ children }) => {
 
     if (status !== 'paused') {
       log('Campaign is not paused, current status:', status);
-      setCampaignState(prev => ({
-        ...prev,
-        error: `Campaign is ${status}, cannot resume`,
-      }));
-      return;
+      // Don't block - let server be source of truth, it will return proper error
     }
 
     log('Resuming campaign:', campaignId);
@@ -307,9 +303,9 @@ export const CampaignProvider = ({ children }) => {
 
     } catch (err) {
       log('Failed to resume campaign:', err);
+      // Keep status as 'paused' so user can retry - don't change to 'error'
       setCampaignState(prev => ({
         ...prev,
-        status: 'error',
         error: err.message,
       }));
     }
@@ -332,11 +328,7 @@ export const CampaignProvider = ({ children }) => {
 
     if (status !== 'running') {
       log('Campaign is not running, current status:', status);
-      setCampaignState(prev => ({
-        ...prev,
-        error: status === 'paused' ? 'Campaign is already paused' : `Campaign is ${status}, cannot pause`,
-      }));
-      return;
+      // Don't block - let server be source of truth
     }
 
     log('Pausing campaign:', campaignId);
@@ -362,6 +354,7 @@ export const CampaignProvider = ({ children }) => {
 
     } catch (err) {
       log('Failed to pause campaign:', err);
+      // Keep current status so user can retry - don't hide buttons
       setCampaignState(prev => ({
         ...prev,
         error: `Pause failed: ${err.message}`,
