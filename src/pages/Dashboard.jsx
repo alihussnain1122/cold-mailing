@@ -53,7 +53,7 @@ export default function Dashboard() {
   }, []);
 
   const successRate = campaign.total > 0 
-    ? Math.round((campaign.sent / campaign.total) * 100) 
+    ? Math.min(100, Math.round((campaign.sent / campaign.total) * 100))
     : 100;
 
   if (loading) {
@@ -173,12 +173,12 @@ export default function Dashboard() {
                   <div className="w-full bg-stone-200 rounded-full h-1.5 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500 ease-out bg-stone-700"
-                      style={{ width: `${campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0}%` }}
+                      style={{ width: `${Math.min(100, campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0)}%` }}
                     ></div>
                   </div>
                   
                   <div className="flex justify-between text-xs text-stone-500 mt-2">
-                    <span>{Math.round((campaign.sent / campaign.total) * 100 || 0)}% complete</span>
+                    <span>{Math.min(100, Math.round((campaign.sent / campaign.total) * 100 || 0))}% complete</span>
                     <span>{campaign.total - campaign.sent} remaining</span>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import { Activity, LogOut, Circle, Menu } from 'lucide-react';
+import { Activity, LogOut, Circle, Menu, Clock } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
@@ -9,7 +9,28 @@ export default function Header() {
   const { user, signOut } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const menuRef = useRef(null);
+
+  // Countdown timer for next email
+  useEffect(() => {
+    if (!campaign.isRunning || !campaign.nextEmailAt) {
+      setCountdown(0);
+      return;
+    }
+    
+    const updateCountdown = () => {
+      const now = Date.now();
+      const target = new Date(campaign.nextEmailAt).getTime();
+      const remaining = Math.max(0, Math.ceil((target - now) / 1000));
+      setCountdown(remaining);
+    };
+    
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    
+    return () => clearInterval(timer);
+  }, [campaign.isRunning, campaign.nextEmailAt]);
 
   const handleLogout = async () => {
     setShowMenu(false);
@@ -101,9 +122,18 @@ export default function Header() {
                   <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                      style={{ width: `${campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0}%` }}
+                      style={{ width: `${Math.min(100, campaign.total > 0 ? (campaign.sent / campaign.total) * 100 : 0)}%` }}
                     ></div>
                   </div>
+                  {countdown > 0 && (
+                    <>
+                      <div className="h-4 w-px bg-stone-300"></div>
+                      <div className="flex items-center gap-1.5 text-amber-600">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="text-sm font-medium tabular-nums">{countdown}s</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-stone-500 bg-stone-50 px-4 py-2 rounded-lg border border-stone-200">
@@ -118,6 +148,9 @@ export default function Header() {
               <div className="md:hidden flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
                 <Circle className="w-2 h-2 fill-emerald-500 text-emerald-500 animate-pulse" />
                 <span className="text-xs font-medium text-emerald-700">{campaign.sent}/{campaign.total}</span>
+                {countdown > 0 && (
+                  <span className="text-xs font-medium text-amber-600 tabular-nums">{countdown}s</span>
+                )}
               </div>
             )}
 

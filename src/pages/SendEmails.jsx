@@ -146,9 +146,9 @@ export default function SendEmails() {
     }
   }
 
-  // Calculate progress percentage
+  // Calculate progress percentage (capped at 100%)
   const progressPercent = total > 0 
-    ? Math.round((sent + failed) / total * 100)
+    ? Math.min(100, Math.round((sent + failed) / total * 100))
     : 0;
   
   // Real countdown timer based on server's next_email_at timestamp
