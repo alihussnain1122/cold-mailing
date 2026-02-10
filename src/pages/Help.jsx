@@ -617,7 +617,7 @@ function SecuritySection() {
       icon: Lock,
       description: 'How your data is protected',
       items: [
-        'SMTP credentials are stored securely in Supabase with RLS',
+        'SMTP credentials are stored securely in our encrypted database',
         'Passwords are stored locally per device (not synced)',
         'All data is encrypted in transit (HTTPS)',
         'Campaign data auto-deletes after 48 hours',
@@ -628,7 +628,7 @@ function SecuritySection() {
       icon: Shield,
       description: 'Authentication and authorization',
       items: [
-        'Secure authentication via Supabase Auth',
+        'Secure authentication via our secure authentication system',
         'Row-level security ensures you only see your data',
         'JWT tokens for API authentication',
         'Session management with automatic expiry',
