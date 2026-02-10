@@ -25,6 +25,25 @@ const CampaignContext = createContext();
 const isDev = import.meta.env.DEV;
 const log = (...args) => isDev && console.log('[Campaign]', ...args);
 
+// Connection status notification helper
+const notifyConnectionPause = () => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Campaign Paused', {
+      body: 'Internet connection lost. Campaign will resume when connection is restored.',
+      icon: '/favicon.ico',
+    });
+  }
+};
+
+const notifyConnectionResume = () => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Campaign Resumed', {
+      body: 'Internet connection restored. Campaign is resuming...',
+      icon: '/favicon.ico',
+    });
+  }
+};
+
 
 export const useCampaign = () => {
   const context = useContext(CampaignContext);
@@ -55,6 +74,8 @@ export const CampaignProvider = ({ children }) => {
 
   const subscriptionRef = useRef(null);
   const pollingRef = useRef(null);
+  const autoPausedRef = useRef(false); // Track if campaign was auto-paused due to connection loss
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   // Load active campaign on mount or when user changes
   useEffect(() => {
@@ -402,14 +423,95 @@ export const CampaignProvider = ({ children }) => {
     });
   }, [campaignState]);
 
+  // Handle internet connectivity changes - auto-pause and auto-resume
+  useEffect(() => {
+    const handleOffline = async () => {
+      log('Internet connection lost');
+      setIsOffline(true);
+      
+      // Auto-pause if campaign is running
+      if (campaignState.status === 'running' && campaignState.campaignId) {
+        log('Auto-pausing campaign due to connection loss');
+        autoPausedRef.current = true;
+        
+        try {
+          const response = await campaignAPI.pause(campaignState.campaignId);
+          if (response.success) {
+            notifyConnectionPause();
+            setCampaignState(prev => ({
+              ...prev,
+              isRunning: false,
+              status: 'paused',
+              error: 'Paused due to connection loss. Will resume when connection is restored.',
+            }));
+            log('Campaign auto-paused successfully');
+          }
+        } catch (err) {
+          log('Failed to auto-pause campaign:', err);
+          // Keep autoPausedRef true so we can try to resume when back online
+        }
+      }
+    };
+
+    const handleOnline = async () => {
+      log('Internet connection restored');
+      setIsOffline(false);
+      
+      // Auto-resume if campaign was auto-paused due to connection loss
+      if (autoPausedRef.current && campaignState.status === 'paused' && campaignState.campaignId) {
+        log('Auto-resuming campaign after connection restored');
+        
+        // Small delay to ensure connection is stable
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const response = await campaignAPI.resume(campaignState.campaignId);
+          if (response.success) {
+            autoPausedRef.current = false;
+            notifyConnectionResume();
+            setCampaignState(prev => ({
+              ...prev,
+              isRunning: true,
+              status: 'running',
+              error: null,
+            }));
+            log('Campaign auto-resumed successfully');
+          }
+        } catch (err) {
+          log('Failed to auto-resume campaign:', err);
+          autoPausedRef.current = false; // Clear flag to avoid infinite retries
+          setCampaignState(prev => ({
+            ...prev,
+            error: `Auto-resume failed: ${err.message}. Please resume manually.`,
+          }));
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [campaignState.status, campaignState.campaignId]);
+
   // Check if there's a paused campaign that can be resumed
   const canResume = campaignState.status === 'paused' && campaignState.campaignId !== null;
 
+  // Clear auto-paused flag when user manually resets campaign
+  const resetCampaignWithClear = useCallback(async () => {
+    autoPausedRef.current = false;
+    await resetCampaign();
+  }, [resetCampaign]);
+
   const value = {
     ...campaignState,
+    isOffline,
     startCampaign,
     stopCampaign,
-    resetCampaign,
+    resetCampaign: resetCampaignWithClear,
     resumeCampaign,
     canResume,
   };
