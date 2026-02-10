@@ -6,12 +6,11 @@
  * SMTP credentials are never exposed to the browser.
  */
 
-import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { campaignAPI } from '../services/api';
 import { campaignService } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import { 
-  replaceVariables,
   notifyCampaignStarted,
   notifyCampaignCompleted,
   notifyCampaignError,
@@ -73,7 +72,6 @@ export const CampaignProvider = ({ children }) => {
   });
 
   const subscriptionRef = useRef(null);
-  const pollingRef = useRef(null);
   const autoPausedRef = useRef(false); // Track if campaign was auto-paused due to connection loss
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -94,7 +92,7 @@ export const CampaignProvider = ({ children }) => {
 
   // Subscribe to real-time updates when we have a campaign
   useEffect(() => {
-    const { campaignId, status } = campaignState;
+    const { campaignId } = campaignState;
     
     if (!campaignId) {
       return;
@@ -134,39 +132,13 @@ export const CampaignProvider = ({ children }) => {
       }
     });
 
-    // Also poll for status (backup for when realtime misses updates)
-    if (status === 'running') {
-      pollingRef.current = setInterval(async () => {
-        try {
-          const response = await campaignAPI.getStatus(campaignId);
-          if (response.success && response.campaign) {
-            const camp = response.campaign;
-            setCampaignState(prev => ({
-              ...prev,
-              sent: camp.sent,
-              failed: camp.failed,
-              progress: camp.sent + camp.failed,
-              status: camp.status,
-              isRunning: camp.status === 'running',
-            }));
-          }
-        } catch (err) {
-          log('Polling error:', err);
-        }
-      }, 5000); // Poll every 5 seconds
-    }
-
     return () => {
       if (subscriptionRef.current) {
         campaignService.unsubscribe(subscriptionRef.current);
         subscriptionRef.current = null;
       }
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
     };
-  }, [campaignState.campaignId, campaignState.status, campaignState.isRunning]);
+  }, [campaignState.campaignId]);
 
   async function loadActiveCampaign() {
     try {
@@ -226,17 +198,14 @@ export const CampaignProvider = ({ children }) => {
     requestNotificationPermission();
 
     try {
-      // Apply personalization to each contact's template
+      // Prepare contacts with their templates (backend handles variable replacement)
       const preparedContacts = contacts.map(contact => ({
         email: contact.email,
         firstName: contact.firstName || contact.name?.split(' ')[0] || '',
         lastName: contact.lastName || contact.name?.split(' ').slice(1).join(' ') || '',
         company: contact.company || '',
         position: contact.position || '',
-        template: {
-          subject: replaceVariables(contact.template.subject, contact),
-          body: replaceVariables(contact.template.body, contact),
-        },
+        template: contact.template,
       }));
 
       // Start campaign via server API - server handles email sending
@@ -506,7 +475,7 @@ export const CampaignProvider = ({ children }) => {
     await resetCampaign();
   }, [resetCampaign]);
 
-  const value = {
+  const value = useMemo(() => ({
     ...campaignState,
     isOffline,
     startCampaign,
@@ -514,7 +483,7 @@ export const CampaignProvider = ({ children }) => {
     resetCampaign: resetCampaignWithClear,
     resumeCampaign,
     canResume,
-  };
+  }), [campaignState, isOffline, startCampaign, stopCampaign, resetCampaignWithClear, resumeCampaign, canResume]);
 
   return (
     <CampaignContext.Provider value={value}>

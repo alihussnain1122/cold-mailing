@@ -1,6 +1,30 @@
 import { supabase } from '../config/supabase';
 
 // ==================
+// AUTH HELPER (with caching)
+// ==================
+let cachedUser = null;
+let cacheExpiry = 0;
+
+async function getAuthUser() {
+  const now = Date.now();
+  if (cachedUser && now < cacheExpiry) {
+    return cachedUser;
+  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  cachedUser = user;
+  cacheExpiry = now + 60000; // Cache for 1 minute
+  return user;
+}
+
+// Clear cache on auth state change
+supabase.auth.onAuthStateChange(() => {
+  cachedUser = null;
+  cacheExpiry = 0;
+});
+
+// ==================
 // TEMPLATES
 // ==================
 export const templatesService = {
@@ -15,8 +39,7 @@ export const templatesService = {
   },
 
   async add(template) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { data, error } = await supabase
       .from('templates')
@@ -60,8 +83,7 @@ export const templatesService = {
   },
 
   async bulkAdd(templates) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const records = templates.map(t => ({
       user_id: user.id,
@@ -80,8 +102,7 @@ export const templatesService = {
   },
 
   async deleteAll() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { error } = await supabase
       .from('templates')
@@ -107,8 +128,7 @@ export const contactsService = {
   },
 
   async add(email, name = null) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { data, error } = await supabase
       .from('contacts')
@@ -130,8 +150,7 @@ export const contactsService = {
   },
 
   async bulkAdd(contacts) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     // Handle both simple strings and objects with personalization fields
     const records = contacts.map(c => {
@@ -189,8 +208,7 @@ export const contactsService = {
   },
 
   async deleteAll() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { error } = await supabase
       .from('contacts')
@@ -229,8 +247,7 @@ export const smtpService = {
   },
 
   async save(config) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { data, error } = await supabase
       .from('smtp_configs')
@@ -256,8 +273,7 @@ export const smtpService = {
   },
 
   async delete() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     // Get config ID first to clear localStorage
     const { data: config } = await supabase
@@ -310,19 +326,12 @@ export const campaignService = {
 
   // Get active campaign (running or paused)
   async getActive() {
-    console.log('\n========== Getting Active Campaign ==========');
-    console.log('Checking auth session...');
-    
     const { data: { session } } = await supabase.auth.getSession();
-    console.log('Session exists:', !!session);
-    console.log('User ID:', session?.user?.id || 'NOT LOGGED IN');
     
     if (!session) {
-      console.warn('⚠️  No active session - user not logged in');
       return null;
     }
     
-    console.log('Querying campaigns table...');
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
@@ -331,18 +340,7 @@ export const campaignService = {
       .limit(1)
       .maybeSingle();
     
-    if (error) {
-      console.error('❌ Campaign query error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      console.error('Error details:', error.details);
-      console.error('Error hint:', error.hint);
-      if (error.code !== 'PGRST116') throw error;
-    }
-    
-    console.log('Campaign found:', !!data);
-    if (data) console.log('Campaign ID:', data.id);
-    console.log('============================================\n');
+    if (error && error.code !== 'PGRST116') throw error;
     
     return data;
   },
@@ -361,8 +359,7 @@ export const campaignService = {
 
   // Create a new campaign
   async create(contacts, config) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     // Create the campaign record
     const { data: campaign, error: campaignError } = await supabase
@@ -593,8 +590,7 @@ export const trackingService = {
 
   // Get user's overall stats
   async getUserStats() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { data, error } = await supabase
       .from('email_tracking')
@@ -629,8 +625,7 @@ export const unsubscribedService = {
   },
 
   async add(email, reason = null, campaignId = null) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthUser();
 
     const { data, error } = await supabase
       .from('unsubscribed_emails')
