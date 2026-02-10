@@ -261,21 +261,57 @@ export const CampaignProvider = ({ children }) => {
    * Resume a paused campaign
    */
   const resumeCampaign = useCallback(async () => {
-    const { campaignId, status } = campaignState;
+    const { campaignId } = campaignState;
     
     if (!campaignId) {
       log('No campaign to resume');
       return;
     }
 
-    if (status !== 'paused') {
-      log('Campaign is not paused, current status:', status);
-      // Don't block - let server be source of truth, it will return proper error
-    }
-
     log('Resuming campaign:', campaignId);
 
     try {
+      // First, refresh campaign status from server to avoid stale state issues
+      const freshStatus = await campaignAPI.getStatus(campaignId);
+      
+      if (freshStatus.campaign?.status === 'running') {
+        log('Campaign is already running - syncing state');
+        setCampaignState(prev => ({
+          ...prev,
+          isRunning: true,
+          status: 'running',
+          sent: freshStatus.campaign.sent_count || prev.sent,
+          failed: freshStatus.campaign.failed_count || prev.failed,
+          error: null,
+        }));
+        return;
+      }
+      
+      if (freshStatus.campaign?.status === 'completed') {
+        log('Campaign is already completed - syncing state');
+        setCampaignState(prev => ({
+          ...prev,
+          isRunning: false,
+          status: 'completed',
+          sent: freshStatus.campaign.sent_count || prev.sent,
+          failed: freshStatus.campaign.failed_count || prev.failed,
+          error: null,
+        }));
+        return;
+      }
+
+      if (freshStatus.campaign?.status !== 'paused') {
+        log('Campaign is not paused, current status:', freshStatus.campaign?.status);
+        // Sync the actual state from server
+        setCampaignState(prev => ({
+          ...prev,
+          status: freshStatus.campaign?.status || prev.status,
+          isRunning: freshStatus.campaign?.status === 'running',
+          error: `Cannot resume: campaign is ${freshStatus.campaign?.status}`,
+        }));
+        return;
+      }
+
       const response = await campaignAPI.resume(campaignId);
 
       if (!response.success) {
