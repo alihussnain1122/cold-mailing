@@ -277,4 +277,18 @@ export const campaignAPI = {
   getStatus: async (campaignId) => {
     return fetchAPI(API_ENDPOINTS.CAMPAIGN_STATUS(campaignId));
   },
+
+  // Trigger worker to process emails (for Vercel free plan - no cron)
+  triggerWorker: async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.CAMPAIGN_WORKER, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return response.ok;
+    } catch {
+      // Silently fail - worker will be triggered again on next poll
+      return false;
+    }
+  },
 };

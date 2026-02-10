@@ -140,6 +140,30 @@ export const CampaignProvider = ({ children }) => {
     };
   }, [campaignState.campaignId]);
 
+  // Poll worker to process emails when campaign is running (Vercel free plan workaround)
+  useEffect(() => {
+    const { campaignId, status } = campaignState;
+    
+    if (!campaignId || status !== 'running') {
+      return;
+    }
+
+    log('Starting worker polling for campaign:', campaignId);
+
+    // Trigger immediately on mount
+    campaignAPI.triggerWorker();
+
+    // Then poll every 45 seconds while campaign is running
+    const pollInterval = setInterval(() => {
+      log('Triggering worker poll...');
+      campaignAPI.triggerWorker();
+    }, 45000);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [campaignState.campaignId, campaignState.status]);
+
   async function loadActiveCampaign() {
     try {
       const campaign = await campaignService.getActive();

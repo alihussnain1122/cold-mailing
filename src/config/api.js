@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
   CAMPAIGN_RESUME: `${API_BASE_URL}/api/campaign/resume`,
   CAMPAIGN_STOP: `${API_BASE_URL}/api/campaign/stop`,
   CAMPAIGN_STATUS: (id) => `${API_BASE_URL}/api/campaign/status/${id}`,
+  CAMPAIGN_WORKER: `${API_BASE_URL}/api/campaign-worker/process`,
   
   // Health check
   HEALTH: `${API_BASE_URL}/api/health`,
