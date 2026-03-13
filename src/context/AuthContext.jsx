@@ -49,6 +49,7 @@ export function AuthProvider({ children }) {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}${safePath}`,
+        scopes: 'openid email profile https://mail.google.com/ https://www.googleapis.com/auth/gmail.send',
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

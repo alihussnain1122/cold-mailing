@@ -146,7 +146,7 @@ export default function Settings() {
       const { data } = await supabase.auth.getSession();
       const providerToken = data?.session?.provider_token || '';
       if (!providerToken) {
-        setError('Google access token not found. Please reconnect Google account and try again.');
+        setError('Google access token not found. Reconnect Google and grant permissions again to enable Gmail sending.');
         return;
       }
 
