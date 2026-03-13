@@ -304,7 +304,7 @@ export const smtpService = {
 // CAMPAIGNS - Synced across devices
 // ==================
 export const campaignService = {
-  // Get recent campaigns for analytics (max 7, all statuses)
+  // Get recent campaigns (max 7, all statuses)
   async getAll() {
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -531,126 +531,6 @@ export const campaignService = {
     if (channel) {
       supabase.removeChannel(channel);
     }
-  }
-};
-
-// ==================
-// EMAIL TRACKING
-// ==================
-export const trackingService = {
-  // Get tracking stats for a campaign
-  async getCampaignStats(campaignId) {
-    const { data, error } = await supabase
-      .from('email_tracking')
-      .select('tracking_type, created_at')
-      .eq('campaign_id', campaignId);
-    
-    if (error) throw error;
-    
-    const stats = {
-      opens: 0,
-      uniqueOpens: new Set(),
-      clicks: 0,
-      uniqueClicks: new Set(),
-      unsubscribes: 0,
-    };
-    
-    (data || []).forEach(event => {
-      switch (event.tracking_type) {
-        case 'open':
-          stats.opens++;
-          break;
-        case 'click':
-          stats.clicks++;
-          break;
-        case 'unsubscribe':
-          stats.unsubscribes++;
-          break;
-      }
-    });
-    
-    let computed = {
-      opens: stats.opens,
-      clicks: stats.clicks,
-      unsubscribes: stats.unsubscribes,
-    };
-
-    // Backward-compatible fallback for old records where tracking events were not inserted
-    if (computed.opens === 0 && computed.clicks === 0) {
-      const { data: emailRows, error: emailRowsError } = await supabase
-        .from('campaign_emails')
-        .select('opened_at, click_count')
-        .eq('campaign_id', campaignId);
-
-      if (emailRowsError) throw emailRowsError;
-
-      const fallbackOpens = (emailRows || []).filter((row) => !!row.opened_at).length;
-      const fallbackClicks = (emailRows || []).reduce((sum, row) => sum + (row.click_count || 0), 0);
-
-      computed = {
-        ...computed,
-        opens: fallbackOpens,
-        clicks: fallbackClicks,
-      };
-    }
-
-    return computed;
-  },
-
-  // Get all tracking events for a campaign
-  async getCampaignEvents(campaignId) {
-    const { data, error } = await supabase
-      .from('email_tracking')
-      .select('*')
-      .eq('campaign_id', campaignId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-
-    if ((data || []).length > 0) {
-      return data;
-    }
-
-    // Fallback: synthesize open events from campaign_emails.opened_at
-    const { data: emailRows, error: emailRowsError } = await supabase
-      .from('campaign_emails')
-      .select('id, email, contact_email, opened_at, tracking_id')
-      .eq('campaign_id', campaignId)
-      .not('opened_at', 'is', null)
-      .order('opened_at', { ascending: false });
-
-    if (emailRowsError) throw emailRowsError;
-
-    return (emailRows || []).map((row) => ({
-      id: `legacy-open-${row.id}`,
-      tracking_id: row.tracking_id,
-      email: row.email || row.contact_email || 'Unknown recipient',
-      tracking_type: 'open',
-      link_url: null,
-      created_at: row.opened_at,
-      source: 'campaign_emails_fallback',
-    }));
-  },
-
-  // Get user's overall stats
-  async getUserStats() {
-    const user = await getAuthUser();
-
-    const { data, error } = await supabase
-      .from('email_tracking')
-      .select('tracking_type')
-      .eq('user_id', user.id);
-    
-    if (error) throw error;
-    
-    const stats = { opens: 0, clicks: 0, unsubscribes: 0 };
-    (data || []).forEach(event => {
-      if (stats[event.tracking_type + 's'] !== undefined) {
-        stats[event.tracking_type + 's']++;
-      }
-    });
-    
-    return stats;
   }
 };
 

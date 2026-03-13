@@ -32,13 +32,11 @@ export default function SendEmails() {
     resumeCampaign, 
     stopCampaign,
     resetCampaign,
-    canResume,
     // Campaign state spread
     campaignId,
     campaignName: activeCampaignName,
     isRunning,
     currentEmail,
-    progress,
     total,
     sent,
     failed,
@@ -46,7 +44,6 @@ export default function SendEmails() {
     error: campaignError,
     nextEmailAt,
     startedAt,
-    currentTemplate,
   } = useCampaign();
 
   const [templates, setTemplates] = useState([]);
@@ -58,12 +55,10 @@ export default function SendEmails() {
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [delayMin, setDelayMin] = useState(10);
   const [delayMax, setDelayMax] = useState(30);
-  const [enableTracking, setEnableTracking] = useState(true);
   const [campaignName, setCampaignName] = useState('');
   
   // UI state
   const [showPreview, setShowPreview] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Load data function
   const loadData = useCallback(async () => {
@@ -139,7 +134,6 @@ export default function SendEmails() {
         delayMin: delayMin * 1000,
         delayMax: delayMax * 1000,
         campaignName: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
-        enableTracking,
       });
     } catch (err) {
       setError(err.message);
@@ -435,30 +429,6 @@ export default function SendEmails() {
                 </p>
               </div>
 
-              {/* Advanced Settings Toggle */}
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-2 text-sm text-stone-600 hover:text-stone-900"
-              >
-                {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                Advanced Settings
-              </button>
-
-              {showAdvanced && (
-                <div className="space-y-3 pt-2 border-t border-stone-100">
-                  {/* Tracking Toggle */}
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={enableTracking}
-                      onChange={(e) => setEnableTracking(e.target.checked)}
-                      className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-500"
-                      disabled={isRunning}
-                    />
-                    <span className="text-sm text-stone-700">Enable open & click tracking</span>
-                  </label>
-                </div>
-              )}
             </div>
           </Card>
 

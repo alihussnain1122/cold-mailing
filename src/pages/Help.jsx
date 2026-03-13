@@ -210,7 +210,6 @@ function GettingStartedSection() {
         'Go to Send Emails page',
         'Select a template from the list',
         'Set delay between emails (10-90 seconds)',
-        'Enable tracking for analytics',
         'Click "Start Campaign"',
       ],
     },
@@ -324,21 +323,8 @@ function FeaturesSection() {
       capabilities: [
         'Select template and preview with real data',
         'Configure delay between emails (prevent spam flags)',
-        'Enable/disable open and click tracking',
         'Pause, resume, or stop campaigns anytime',
         'Real-time progress updates',
-      ],
-    },
-    {
-      title: 'Analytics',
-      icon: BarChart3,
-      description: 'Track email performance and engagement.',
-      capabilities: [
-        'View open rates and click rates',
-        'See which links were clicked',
-        'Campaign-by-campaign breakdown',
-        'Export analytics data',
-        'Unsubscribe tracking',
       ],
     },
     {
@@ -724,15 +710,6 @@ function FAQSection({ expandedFaqs, toggleFaq }) {
 We recommend staying under these limits and sending in batches to avoid account suspension.`,
     },
     {
-      id: 'tracking-work',
-      question: 'How does email tracking work?',
-      answer: `We track opens and clicks using:
-• Open tracking: A tiny invisible image (1x1 pixel) in your email
-• Click tracking: Links are wrapped through our tracking server
-
-When a recipient opens or clicks, we record the event. Note: Some email clients block tracking pixels, so open rates may be underreported.`,
-    },
-    {
       id: 'personalization',
       question: 'How do I personalize emails?',
       answer: `Use double curly braces with variable names:
@@ -755,7 +732,7 @@ Make sure your contacts have these fields filled in. If a field is empty, "there
     {
       id: 'unsubscribe',
       question: 'How do unsubscribes work?',
-      answer: `When tracking is enabled, unsubscribe links are added to emails. When clicked:
+      answer: `Unsubscribe links can be added to emails. When clicked:
 1. The recipient sees a confirmation page
 2. Their email is recorded as unsubscribed
 3. Future campaigns automatically skip unsubscribed emails

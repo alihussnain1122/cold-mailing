@@ -148,16 +148,6 @@ BEGIN
     UPDATE campaign_emails SET email = contact_email WHERE email IS NULL;
   END IF;
   
-  -- Add tracking_id column
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='campaign_emails' AND column_name='tracking_id') THEN
-    ALTER TABLE campaign_emails ADD COLUMN tracking_id TEXT;
-  END IF;
-  
-  -- Add email_hash column for lookup without exposing email
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='campaign_emails' AND column_name='email_hash') THEN
-    ALTER TABLE campaign_emails ADD COLUMN email_hash TEXT;
-  END IF;
-  
   -- Add message_id column for tracking
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='campaign_emails' AND column_name='message_id') THEN
     ALTER TABLE campaign_emails ADD COLUMN message_id TEXT;
