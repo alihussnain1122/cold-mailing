@@ -234,6 +234,8 @@ export const smtpService = {
     if (data) {
       // Get password from localStorage (device-specific for security)
       const storedPass = localStorage.getItem(`smtp_pass_${data.id}`);
+      const storedAuthType = localStorage.getItem(`smtp_auth_type_${data.id}`) || 'password';
+      const storedGoogleToken = localStorage.getItem(`smtp_google_token_${data.id}`) || '';
       return {
         id: data.id,
         smtpHost: data.smtp_host,
@@ -241,6 +243,8 @@ export const smtpService = {
         emailUser: data.email_user,
         emailPass: storedPass || '',
         senderName: data.sender_name || 'Support Team',
+        authType: storedAuthType,
+        googleAccessToken: storedGoogleToken,
       };
     }
     return null;
@@ -267,6 +271,16 @@ export const smtpService = {
     // Store password in localStorage (device-specific for security)
     if (config.emailPass) {
       localStorage.setItem(`smtp_pass_${data.id}`, config.emailPass);
+    } else {
+      localStorage.removeItem(`smtp_pass_${data.id}`);
+    }
+
+    localStorage.setItem(`smtp_auth_type_${data.id}`, config.authType || 'password');
+
+    if (config.googleAccessToken) {
+      localStorage.setItem(`smtp_google_token_${data.id}`, config.googleAccessToken);
+    } else {
+      localStorage.removeItem(`smtp_google_token_${data.id}`);
     }
     
     return data;
@@ -283,6 +297,8 @@ export const smtpService = {
     
     if (config) {
       localStorage.removeItem(`smtp_pass_${config.id}`);
+      localStorage.removeItem(`smtp_auth_type_${config.id}`);
+      localStorage.removeItem(`smtp_google_token_${config.id}`);
     }
 
     const { error } = await supabase
@@ -296,7 +312,11 @@ export const smtpService = {
   // Check if configured (has all required fields)
   async isConfigured() {
     const config = await this.get();
-    return !!(config?.smtpHost && config?.emailUser && config?.emailPass);
+    if (!config?.smtpHost || !config?.emailUser) return false;
+    if (config.authType === 'google') {
+      return !!config.googleAccessToken;
+    }
+    return !!config.emailPass;
   }
 };
 

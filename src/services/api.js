@@ -2,6 +2,12 @@ import { API_ENDPOINTS } from '../config/api';
 import { smtpService } from './supabase';
 import { supabase } from '../config/supabase';
 
+function hasUsableMailAuth(creds) {
+  if (!creds?.smtpHost || !creds?.emailUser) return false;
+  if (creds.authType === 'google') return !!creds.googleAccessToken;
+  return !!creds.emailPass;
+}
+
 // Error types for better handling
 export class NetworkError extends Error {
   constructor(message = 'Network error. Please check your internet connection.') {
@@ -94,7 +100,10 @@ async function fetchAPI(url, options = {}) {
 export const configAPI = {
   get: async () => {
     const creds = await smtpService.get();
-    const isConfigured = !!(creds?.smtpHost && creds?.emailUser && creds?.emailPass);
+    const isConfigured = !!(creds?.smtpHost && creds?.emailUser && (
+      (creds.authType === 'google' && creds.googleAccessToken) ||
+      (creds.authType !== 'google' && creds.emailPass)
+    ));
     return {
       configured: isConfigured,
       smtpHost: creds?.smtpHost || '',
@@ -112,7 +121,7 @@ export const sendAPI = {
   // Send test email with template content directly (for Vercel compatibility)
   testWithTemplate: async (email, template, senderName) => {
     const creds = await smtpService.get();
-    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+    if (!hasUsableMailAuth(creds)) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     const credentials = {
@@ -121,6 +130,8 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
+      authType: creds.authType || 'password',
+      googleAccessToken: creds.googleAccessToken || null,
     };
     // Use sendSingle endpoint with template content
     return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
@@ -139,7 +150,7 @@ export const sendAPI = {
   // Legacy test method (deprecated - uses templateIndex)
   test: async (email, templateIndex) => {
     const creds = await smtpService.get();
-    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+    if (!hasUsableMailAuth(creds)) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     const credentials = {
@@ -148,6 +159,8 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
+      authType: creds.authType || 'password',
+      googleAccessToken: creds.googleAccessToken || null,
     };
     return fetchAPI(API_ENDPOINTS.SEND_TEST, {
       method: 'POST',
@@ -160,7 +173,7 @@ export const sendAPI = {
   },
   sendSingle: async (emailData) => {
     const creds = await smtpService.get();
-    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+    if (!hasUsableMailAuth(creds)) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     const credentials = {
@@ -169,6 +182,8 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
+      authType: creds.authType || 'password',
+      googleAccessToken: creds.googleAccessToken || null,
     };
     return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
       method: 'POST',
@@ -206,7 +221,7 @@ export const campaignAPI = {
   // Start a new campaign (server-side execution)
   start: async (options) => {
     const creds = await smtpService.get();
-    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+    if (!hasUsableMailAuth(creds)) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     
@@ -221,6 +236,8 @@ export const campaignAPI = {
           emailUser: creds.emailUser,
           emailPass: creds.emailPass,
           senderName: creds.senderName,
+          authType: creds.authType || 'password',
+          googleAccessToken: creds.googleAccessToken || null,
         },
         senderName: options.senderName || creds.senderName,
         delayMin: options.delayMin || 10000,
@@ -241,7 +258,7 @@ export const campaignAPI = {
   // Resume a paused campaign
   resume: async (campaignId) => {
     const creds = await smtpService.get();
-    if (!creds?.smtpHost || !creds?.emailUser || !creds?.emailPass) {
+    if (!hasUsableMailAuth(creds)) {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     
@@ -255,6 +272,8 @@ export const campaignAPI = {
           emailUser: creds.emailUser,
           emailPass: creds.emailPass,
           senderName: creds.senderName,
+          authType: creds.authType || 'password',
+          googleAccessToken: creds.googleAccessToken || null,
         },
       }),
     });

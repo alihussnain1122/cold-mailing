@@ -4,6 +4,7 @@ import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/
 import { smtpService } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { checkAllDNS, getProviderInstructions } from '../utils';
+import { supabase } from '../config/supabase';
 
 export default function Settings() {
   const { user, signInWithGoogle, isGoogleUser } = useAuth();
@@ -13,6 +14,8 @@ export default function Settings() {
     emailUser: '',
     emailPass: '',
     senderName: 'Support Team',
+    authType: 'password',
+    googleAccessToken: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,8 +60,11 @@ export default function Settings() {
           emailUser: creds.emailUser || '',
           emailPass: creds.emailPass || '',
           senderName: creds.senderName || 'Support Team',
+          authType: creds.authType || 'password',
+          googleAccessToken: creds.googleAccessToken || '',
         });
-        setConfigured(!!(creds.smtpHost && creds.emailUser && creds.emailPass));
+        const validAuth = creds.authType === 'google' ? !!creds.googleAccessToken : !!creds.emailPass;
+        setConfigured(!!(creds.smtpHost && creds.emailUser && validAuth));
       }
     } catch (err) {
       console.error('Failed to load SMTP config:', err);
@@ -86,8 +92,18 @@ export default function Settings() {
   async function handleSave(e) {
     e.preventDefault();
     
-    if (!config.smtpHost || !config.emailUser || !config.emailPass) {
-      setError('All fields are required');
+    if (!config.smtpHost || !config.emailUser) {
+      setError('SMTP host and email are required');
+      return;
+    }
+
+    if (config.authType === 'google' && !config.googleAccessToken) {
+      setError('Google token missing. Reconnect your Google account and click Use Gmail SMTP.');
+      return;
+    }
+
+    if (config.authType !== 'google' && !config.emailPass) {
+      setError('App password is required for password-based SMTP mode.');
       return;
     }
 
@@ -119,20 +135,40 @@ export default function Settings() {
     }
   }
 
-  function handleUseGoogleForSmtp() {
+  async function handleUseGoogleForSmtp() {
     if (!googleEmail) {
       setError('Google account email not found. Please reconnect your Google account.');
       return;
     }
 
-    setConfig((prev) => ({
-      ...prev,
-      smtpHost: 'smtp.gmail.com',
-      smtpPort: '587',
-      emailUser: googleEmail,
-      senderName: prev.senderName || (user?.user_metadata?.full_name || 'Support Team'),
-    }));
-    setSuccess('Gmail SMTP details autofilled. Add your Gmail App Password and click Save Configuration.');
+    setSaving(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const providerToken = data?.session?.provider_token || '';
+      if (!providerToken) {
+        setError('Google access token not found. Please reconnect Google account and try again.');
+        return;
+      }
+
+      const googleConfig = {
+        smtpHost: 'smtp.gmail.com',
+        smtpPort: '587',
+        emailUser: googleEmail,
+        emailPass: '',
+        authType: 'google',
+        googleAccessToken: providerToken,
+        senderName: config.senderName || (user?.user_metadata?.full_name || 'Support Team'),
+      };
+
+      await smtpService.save(googleConfig);
+      setConfig(googleConfig);
+      setConfigured(true);
+      setSuccess('Gmail connected successfully. You can now send emails directly with your Google account.');
+    } catch (err) {
+      setError('Failed to enable Gmail sending: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleClear() {
@@ -148,6 +184,8 @@ export default function Settings() {
         emailUser: '',
         emailPass: '',
         senderName: 'Support Team',
+        authType: 'password',
+        googleAccessToken: '',
       });
       setConfigured(false);
       setDnsResults(null);
@@ -249,9 +287,9 @@ export default function Settings() {
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-blue-900">Google Account</h4>
+                        <h4 className="text-sm font-semibold text-blue-900">Google Account</h4>
                     <p className="text-xs text-blue-700 mt-1">
-                      Connect Google to auto-fill Gmail SMTP details for faster setup.
+                          Connect Google to send with Gmail directly, without app password.
                     </p>
                     {googleLinked && googleEmail && (
                       <p className="text-xs text-blue-800 mt-2 font-medium">Connected: {googleEmail}</p>
@@ -264,7 +302,7 @@ export default function Settings() {
                       </Button>
                     ) : (
                       <Button type="button" variant="outline" onClick={handleUseGoogleForSmtp}>
-                        Use Gmail SMTP
+                        Use Google Gmail
                       </Button>
                     )}
                   </div>
@@ -325,6 +363,7 @@ export default function Settings() {
                     onChange={(e) => setConfig({ ...config, emailUser: e.target.value })}
                   />
 
+                  {config.authType !== 'google' && (
                   <div>
                     <label className="block text-sm font-medium text-stone-700 mb-1.5">
                       App Password
@@ -351,6 +390,15 @@ export default function Settings() {
                       For Gmail, use an App Password instead of your regular password
                     </p>
                   </div>
+                  )}
+
+                  {config.authType === 'google' && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <p className="text-xs text-emerald-700">
+                        Google OAuth mode enabled. No SMTP app password is required.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
