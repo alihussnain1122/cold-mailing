@@ -620,7 +620,7 @@ function SecuritySection() {
         'SMTP credentials are stored securely in our encrypted database',
         'Passwords are stored locally per device (not synced)',
         'All data is encrypted in transit (HTTPS)',
-        'Campaign data auto-deletes after 48 hours',
+        'Campaign data is retained until you delete it',
       ],
     },
     {
@@ -750,7 +750,7 @@ Make sure your contacts have these fields filled in. If a field is empty, "there
     {
       id: 'data-retention',
       question: 'How long is campaign data stored?',
-      answer: `Campaign data (emails queued, sent status) is automatically deleted 48 hours after campaign completion for privacy. Your contacts and templates are stored until you delete them.`,
+      answer: `Campaign data (emails queued, sent status) is retained so you can reuse it in future campaigns. Your contacts and templates are also stored until you delete them.`,
     },
     {
       id: 'unsubscribe',

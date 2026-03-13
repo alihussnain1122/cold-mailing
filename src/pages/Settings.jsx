@@ -372,9 +372,9 @@ export default function Settings() {
             <div className="flex items-start gap-3">
               <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-blue-900 text-sm">Auto Data Cleanup</h4>
+                <h4 className="font-medium text-blue-900 text-sm">Data Retention</h4>
                 <p className="text-xs text-blue-700 mt-1">
-                  Campaign data is automatically deleted 48 hours after completion for your privacy and security. Templates and contacts remain until you delete them manually.
+                  Campaign data is retained so you can use it for future campaigns. Templates and contacts also remain available until you delete them manually.
                 </p>
               </div>
             </div>

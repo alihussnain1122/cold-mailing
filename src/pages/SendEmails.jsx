@@ -262,7 +262,7 @@ export default function SendEmails() {
           <div>
             <p className="text-sm font-medium text-amber-800">Data Retention Policy</p>
             <p className="text-sm text-amber-700 mt-1">
-              Campaign data is automatically deleted 48 hours after completion for your privacy and security.
+              Campaign data is kept so you can reuse it in future campaigns. You can delete campaign records manually anytime.
             </p>
           </div>
         </div>

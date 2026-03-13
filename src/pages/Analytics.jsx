@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
+import { Eye, MousePointer, XCircle, RefreshCw, Mail, TrendingUp, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Search } from 'lucide-react';
 import { Card, Badge, Button, PageLoader } from '../components/UI';
 import { trackingService, campaignService } from '../services/supabase';
 
@@ -14,6 +14,7 @@ export default function Analytics() {
   const [activeTab, setActiveTab] = useState('overview');
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState('all'); // 'all', 'open', 'click'
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadInitialData();
@@ -57,9 +58,26 @@ export default function Analytics() {
 
   // Filter and paginate events
   const filteredEvents = useMemo(() => {
-    if (filterType === 'all') return trackingEvents;
-    return trackingEvents.filter(e => e.tracking_type === filterType);
-  }, [trackingEvents, filterType]);
+    const query = searchQuery.trim().toLowerCase();
+
+    return trackingEvents.filter((event) => {
+      const typeMatches = filterType === 'all' || event.tracking_type === filterType;
+
+      if (!typeMatches) return false;
+      if (!query) return true;
+
+      const searchable = [
+        event.email,
+        event.link_url,
+        event.tracking_type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [trackingEvents, filterType, searchQuery]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   
@@ -71,7 +89,7 @@ export default function Analytics() {
   // Reset page when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterType, selectedCampaign]);
+  }, [filterType, searchQuery, selectedCampaign]);
 
   if (loading) {
     return <PageLoader />;
@@ -256,39 +274,37 @@ export default function Analytics() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setFilterType('all')}
-                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                          filterType === 'all'
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                        }`}
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <div className="relative flex-1 min-w-[220px]">
+                        <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search by email or link"
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
+                        />
+                      </div>
+                      <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="px-3 py-2 text-sm border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-stone-500 focus:border-stone-500"
                       >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setFilterType('open')}
-                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 ${
-                          filterType === 'open'
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                        }`}
-                      >
-                        <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                        Opens
-                      </button>
-                      <button
-                        onClick={() => setFilterType('click')}
-                        className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 ${
-                          filterType === 'click'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        }`}
-                      >
-                        <MousePointer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                        Clicks
-                      </button>
+                        <option value="all">All activity</option>
+                        <option value="open">Opens only</option>
+                        <option value="click">Clicks only</option>
+                      </select>
+                      {(searchQuery || filterType !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilterType('all');
+                          }}
+                          className="px-3 py-2 text-sm font-medium rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -317,7 +333,7 @@ export default function Analytics() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-stone-900 truncate">{event.email}</span>
+                              <span className="text-sm font-medium text-stone-900 truncate">{event.email || 'Unknown recipient'}</span>
                               <Badge 
                                 variant={event.tracking_type === 'open' ? 'success' : 'warning'}
                                 className="flex-shrink-0"

@@ -569,11 +569,32 @@ export const trackingService = {
       }
     });
     
-    return {
+    let computed = {
       opens: stats.opens,
       clicks: stats.clicks,
       unsubscribes: stats.unsubscribes,
     };
+
+    // Backward-compatible fallback for old records where tracking events were not inserted
+    if (computed.opens === 0 && computed.clicks === 0) {
+      const { data: emailRows, error: emailRowsError } = await supabase
+        .from('campaign_emails')
+        .select('opened_at, click_count')
+        .eq('campaign_id', campaignId);
+
+      if (emailRowsError) throw emailRowsError;
+
+      const fallbackOpens = (emailRows || []).filter((row) => !!row.opened_at).length;
+      const fallbackClicks = (emailRows || []).reduce((sum, row) => sum + (row.click_count || 0), 0);
+
+      computed = {
+        ...computed,
+        opens: fallbackOpens,
+        clicks: fallbackClicks,
+      };
+    }
+
+    return computed;
   },
 
   // Get all tracking events for a campaign
@@ -585,7 +606,30 @@ export const trackingService = {
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+
+    if ((data || []).length > 0) {
+      return data;
+    }
+
+    // Fallback: synthesize open events from campaign_emails.opened_at
+    const { data: emailRows, error: emailRowsError } = await supabase
+      .from('campaign_emails')
+      .select('id, email, contact_email, opened_at, tracking_id')
+      .eq('campaign_id', campaignId)
+      .not('opened_at', 'is', null)
+      .order('opened_at', { ascending: false });
+
+    if (emailRowsError) throw emailRowsError;
+
+    return (emailRows || []).map((row) => ({
+      id: `legacy-open-${row.id}`,
+      tracking_id: row.tracking_id,
+      email: row.email || row.contact_email || 'Unknown recipient',
+      tracking_type: 'open',
+      link_url: null,
+      created_at: row.opened_at,
+      source: 'campaign_emails_fallback',
+    }));
   },
 
   // Get user's overall stats
