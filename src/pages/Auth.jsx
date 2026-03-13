@@ -11,7 +11,15 @@ export default function Auth() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
+
+  const getGoogleAuthErrorMessage = (err) => {
+    const raw = (err?.message || '').toLowerCase();
+    if (raw.includes('unsupported provider') || raw.includes('provider is not enabled')) {
+      return `Google sign-in is not enabled yet. Enable it in Supabase Dashboard -> Authentication -> Providers -> Google, and add redirect URL: ${window.location.origin}/`;
+    }
+    return err?.message || 'Google sign-in failed';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,6 +47,19 @@ export default function Auth() {
     }
   };
 
+  const handleGoogleAuth = async () => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const { error } = await signInWithGoogle('/');
+      if (error) throw error;
+    } catch (err) {
+      setError(getGoogleAuthErrorMessage(err));
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -61,14 +82,14 @@ export default function Auth() {
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 shrink-0" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {success && (
             <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-emerald-700">
-              <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 shrink-0" />
               <span className="text-sm">{success}</span>
             </div>
           )}
@@ -143,6 +164,24 @@ export default function Auth() {
               )}
             </button>
           </form>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px bg-stone-200 flex-1" />
+            <span className="text-xs text-stone-500 uppercase tracking-wide">or</span>
+            <div className="h-px bg-stone-200 flex-1" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleAuth}
+            disabled={loading}
+            className="w-full py-3 border border-stone-300 bg-white text-stone-800 rounded-xl font-semibold hover:bg-stone-50 focus:ring-4 focus:ring-stone-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+              <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.5 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.7-6 5.9-6c1.8 0 3.1.8 3.8 1.4l2.6-2.5C16.9 3.5 14.7 2.6 12 2.6 6.9 2.6 2.8 6.8 2.8 12s4.1 9.4 9.2 9.4c5.3 0 8.8-3.7 8.8-8.9 0-.6-.1-1-.2-1.4H12z" />
+            </svg>
+            Continue with Google
+          </button>
 
           <div className="mt-6 text-center">
             <button

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw, Clock } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
 import { smtpService } from '../services/supabase';
@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { checkAllDNS, getProviderInstructions } from '../utils';
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, signInWithGoogle, isGoogleUser } = useAuth();
   const [config, setConfig] = useState({
     smtpHost: '',
     smtpPort: '587',
@@ -28,24 +28,20 @@ export default function Settings() {
   const [dnsChecking, setDnsChecking] = useState(false);
   const [dnsError, setDnsError] = useState('');
   const [showInstructions, setShowInstructions] = useState(null);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
 
-  useEffect(() => {
-    loadConfig();
-    setSecureConnection(window.isSecureContext || location.hostname === 'localhost');
-  }, [user]);
+  const googleLinked = isGoogleUser(user);
+  const googleEmail = user?.email || '';
 
-  // Auto-dismiss messages
-  useEffect(() => {
-    if (error || success) {
-      const timer = setTimeout(() => {
-        setError('');
-        setSuccess('');
-      }, 5000);
-      return () => clearTimeout(timer);
+  const getGoogleAuthErrorMessage = (err) => {
+    const raw = (err?.message || '').toLowerCase();
+    if (raw.includes('unsupported provider') || raw.includes('provider is not enabled')) {
+      return `Google connect is not enabled yet. Enable it in Supabase Dashboard -> Authentication -> Providers -> Google, and add redirect URL: ${window.location.origin}/settings`;
     }
-  }, [error, success]);
+    return err?.message || 'Failed to connect Google account';
+  };
 
-  async function loadConfig() {
+  const loadConfig = useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
@@ -69,7 +65,23 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
+
+  useEffect(() => {
+    loadConfig();
+    setSecureConnection(window.isSecureContext || location.hostname === 'localhost');
+  }, [loadConfig]);
+
+  // Auto-dismiss messages
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('');
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -94,6 +106,35 @@ export default function Settings() {
     }
   }
 
+  async function handleConnectGoogle() {
+    setError('');
+    setSuccess('');
+    setGoogleConnecting(true);
+    try {
+      const { error } = await signInWithGoogle('/settings');
+      if (error) throw error;
+    } catch (err) {
+      setError(getGoogleAuthErrorMessage(err));
+      setGoogleConnecting(false);
+    }
+  }
+
+  function handleUseGoogleForSmtp() {
+    if (!googleEmail) {
+      setError('Google account email not found. Please reconnect your Google account.');
+      return;
+    }
+
+    setConfig((prev) => ({
+      ...prev,
+      smtpHost: 'smtp.gmail.com',
+      smtpPort: '587',
+      emailUser: googleEmail,
+      senderName: prev.senderName || (user?.user_metadata?.full_name || 'Support Team'),
+    }));
+    setSuccess('Gmail SMTP details autofilled. Add your Gmail App Password and click Save Configuration.');
+  }
+
   function handleClear() {
     setClearConfirm(true);
   }
@@ -111,7 +152,7 @@ export default function Settings() {
       setConfigured(false);
       setDnsResults(null);
       setSuccess('Credentials cleared');
-    } catch (err) {
+    } catch {
       setError('Failed to clear credentials');
     }
     setClearConfirm(false);
@@ -205,6 +246,31 @@ export default function Settings() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-blue-900">Google Account</h4>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Connect Google to auto-fill Gmail SMTP details for faster setup.
+                    </p>
+                    {googleLinked && googleEmail && (
+                      <p className="text-xs text-blue-800 mt-2 font-medium">Connected: {googleEmail}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {!googleLinked ? (
+                      <Button type="button" variant="outline" onClick={handleConnectGoogle} loading={googleConnecting}>
+                        Connect Google
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="outline" onClick={handleUseGoogleForSmtp}>
+                        Use Gmail SMTP
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Sender Info Section */}
               <div>
                 <h4 className="text-sm font-semibold text-stone-900 mb-4 flex items-center gap-2">
