@@ -200,10 +200,10 @@ export default function Dashboard() {
                 )}
                 
                 {/* Timer */}
-                {campaign.nextEmailIn > 0 && (
+                {campaign.status === 'running' && campaign.nextEmailAt && (
                   <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
                     <Clock className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm text-amber-700">Next email in <span className="font-semibold">{campaign.nextEmailIn}s</span></span>
+                    <span className="text-sm text-amber-700">Waiting for next email...</span>
                   </div>
                 )}
 
@@ -254,28 +254,6 @@ export default function Dashboard() {
                         Discard
                       </Button>
                     </div>
-                  </div>
-                )}
-
-                {/* Running on Another Device Banner */}
-                {campaign.isRunningElsewhere && (
-                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-sky-100 rounded-lg flex items-center justify-center">
-                        <Activity className="w-5 h-5 text-sky-600 animate-pulse" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-stone-900">Campaign Running on Another Device</div>
-                        <div className="text-sm text-sky-600">Progress syncing in real-time</div>
-                      </div>
-                    </div>
-                    <Button 
-                      size="sm"
-                      variant="outline"
-                      onClick={() => campaign.stopCampaign()}
-                    >
-                      Pause Campaign
-                    </Button>
                   </div>
                 )}
 

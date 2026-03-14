@@ -6,11 +6,12 @@ export default function OfflineIndicator() {
   const [showReconnected, setShowReconnected] = useState(false);
 
   useEffect(() => {
+    let reconnectTimer;
+
     const handleOnline = () => {
       setIsOffline(false);
       setShowReconnected(true);
-      // Hide the "reconnected" message after 3 seconds
-      setTimeout(() => setShowReconnected(false), 3000);
+      reconnectTimer = setTimeout(() => setShowReconnected(false), 3000);
     };
 
     const handleOffline = () => {
@@ -22,6 +23,7 @@ export default function OfflineIndicator() {
     window.addEventListener('offline', handleOffline);
 
     return () => {
+      clearTimeout(reconnectTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

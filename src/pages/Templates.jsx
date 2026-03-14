@@ -47,13 +47,13 @@ export default function Templates() {
     tone: 'professional',
     audience: '',
     keyPoints: [''],
-    availableFields: ['email'], // Default to email only
+    availableFields: [], // User selects which fields they have
   });
   const [aiPreview, setAiPreview] = useState(null);
 
   // Available personalization fields
   const PERSONALIZATION_FIELDS = [
-    { id: 'email', label: 'Email', always: true },
+    { id: 'email', label: 'Email' },
     { id: 'firstName', label: 'First Name' },
     { id: 'lastName', label: 'Last Name' },
     { id: 'company', label: 'Company' },
@@ -398,7 +398,7 @@ export default function Templates() {
         tone: 'professional',
         audience: '',
         keyPoints: [''],
-        availableFields: ['email'],
+        availableFields: [],
       });
     } catch (err) {
       setError(err.message);
@@ -852,14 +852,11 @@ export default function Templates() {
                 <div className="flex flex-wrap gap-2">
                   {PERSONALIZATION_FIELDS.map((field) => {
                     const isSelected = aiForm.availableFields.includes(field.id);
-                    const isDisabled = field.always;
                     return (
                       <button
                         key={field.id}
                         type="button"
-                        disabled={isDisabled}
                         onClick={() => {
-                          if (isDisabled) return;
                           setAiForm({
                             ...aiForm,
                             availableFields: isSelected
@@ -871,10 +868,10 @@ export default function Templates() {
                           isSelected
                             ? 'bg-purple-600 text-white'
                             : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                        } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        }`}
                       >
                         {field.label}
-                        {isSelected && !isDisabled && ' ✓'}
+                        {isSelected && ' ✓'}
                       </button>
                     );
                   })}
@@ -923,7 +920,9 @@ export default function Templates() {
               <div className="bg-purple-50 border border-purple-100 rounded-lg p-3">
                 <p className="text-sm text-purple-700">
                   <Sparkles className="w-4 h-4 inline mr-1" />
-                  AI will use these variables: {aiForm.availableFields.map(f => `{{${f}}}`).join(', ')}
+                  {aiForm.availableFields.length > 0
+                    ? `AI will use these variables: ${aiForm.availableFields.map(f => `{{${f}}}`).join(', ')}`
+                    : 'No personalization fields selected. AI will generate a generic template.'}
                 </p>
               </div>
 

@@ -16,14 +16,12 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
-  Copy,
-  RefreshCw,
   ExternalLink,
 } from 'lucide-react';
 import { Card, Button, Alert, LoadingSpinner } from '../components/UI';
 import { useCampaign } from '../context/CampaignContext';
 import { templatesService, contactsService } from '../services/supabase';
-import { replaceVariables, validateContactEmails } from '../utils';
+import { replaceVariables, validateContactEmails, sanitizeAndFormat } from '../utils';
 
 export default function SendEmails() {
   const navigate = useNavigate();
@@ -456,7 +454,7 @@ export default function SendEmails() {
                     <p className="text-xs text-stone-500 uppercase tracking-wide mb-1">Body</p>
                     <div 
                       className="text-stone-700 text-sm whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ __html: previewEmail.body.replace(/\n/g, '<br>') }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeAndFormat(previewEmail.body) }}
                     />
                   </div>
                   <p className="text-xs text-stone-500 flex items-center gap-1">

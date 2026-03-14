@@ -63,10 +63,10 @@ async function fetchAPI(url, options = {}) {
       ...options,
       headers,
     });
-    
-    const data = await response.json();
-    
+
     if (!response.ok) {
+      let data;
+      try { data = await response.json(); } catch { data = {}; }
       if (response.status === 401) {
         throw new AuthError(data.error || 'Authentication required');
       }
@@ -78,7 +78,8 @@ async function fetchAPI(url, options = {}) {
       }
       throw new Error(data.error || 'Request failed');
     }
-    
+
+    const data = await response.json();
     return data;
   } catch (error) {
     // Network errors (no internet, CORS, etc.)

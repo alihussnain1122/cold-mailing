@@ -62,6 +62,7 @@ function ProtectedRoutes() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/help" element={<Help />} />
           <Route path="/failed-emails" element={<FailedEmails />} />
+          <Route path="/reset-password" element={<Settings />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

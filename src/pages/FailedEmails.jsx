@@ -53,27 +53,39 @@ export default function FailedEmails() {
     }
   };
 
-  const handleCopyAll = () => {
+  const handleCopyAll = async () => {
     const emails = failedEmails.map(f => f.email || f.contact_email).join('\n');
-    navigator.clipboard.writeText(emails);
-    setSuccess('All failed emails copied to clipboard');
-    setTimeout(() => setSuccess(''), 3000);
+    try {
+      await navigator.clipboard.writeText(emails);
+      setSuccess('All failed emails copied to clipboard');
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+    setTimeout(() => { setSuccess(''); setError(''); }, 3000);
   };
 
-  const handleCopySelected = () => {
+  const handleCopySelected = async () => {
     const emails = failedEmails
       .filter(f => selectedEmails.includes(f.id))
       .map(f => f.email || f.contact_email)
       .join('\n');
-    navigator.clipboard.writeText(emails);
-    setSuccess(`${selectedEmails.length} email(s) copied to clipboard`);
-    setTimeout(() => setSuccess(''), 3000);
+    try {
+      await navigator.clipboard.writeText(emails);
+      setSuccess(`${selectedEmails.length} email(s) copied to clipboard`);
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+    setTimeout(() => { setSuccess(''); setError(''); }, 3000);
   };
 
-  const handleCopySingle = (email) => {
-    navigator.clipboard.writeText(email);
-    setSuccess('Email copied to clipboard');
-    setTimeout(() => setSuccess(''), 3000);
+  const handleCopySingle = async (email) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setSuccess('Email copied to clipboard');
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+    setTimeout(() => { setSuccess(''); setError(''); }, 3000);
   };
 
   const handleExportCSV = () => {

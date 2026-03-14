@@ -22,7 +22,6 @@ import {
   Lock,
   Sparkles,
   Target,
-  Search,
 } from 'lucide-react';
 import { Card, Badge } from '../components/UI';
 
@@ -39,7 +38,6 @@ const SECTIONS = [
 export default function Help() {
   const [activeSection, setActiveSection] = useState('getting-started');
   const [expandedFaqs, setExpandedFaqs] = useState(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
 
   const toggleFaq = (id) => {
     setExpandedFaqs(prev => {
@@ -71,20 +69,6 @@ export default function Help() {
             <Sparkles className="w-3.5 h-3.5 mr-1.5" />
             v1.0
           </Badge>
-        </div>
-
-        {/* Search */}
-        <div className="mt-5 pt-5 border-t border-stone-100">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
-            <input
-              type="search"
-              placeholder="Search documentation..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-500 focus:border-transparent"
-            />
-          </div>
         </div>
       </div>
 

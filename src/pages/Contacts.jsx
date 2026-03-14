@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User, Building, Check } from 'lucide-react';
+import { Plus, Trash2, Upload, Search, Users, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User, Building } from 'lucide-react';
 import { Card, Button, Input, Modal, Alert, ConfirmDialog, PageLoader, DuplicateDialog } from '../components/UI';
 import { contactsService } from '../services/supabase';
 import { useDebounce, parseContactsCSV, findDuplicateContacts, validateContactEmails } from '../utils';
@@ -214,6 +214,7 @@ export default function Contacts() {
     try {
       await contactsService.deleteAll();
       setContacts([]);
+      setSelectedIds([]);
       setSuccess('All contacts deleted successfully');
     } catch (err) {
       setError(err.message);
