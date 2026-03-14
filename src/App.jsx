@@ -4,6 +4,7 @@ import Sidebar from './components/Layout/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
 import { Dashboard, Templates, Contacts, SendEmails, Settings, Help, FailedEmails } from './pages';
 import Auth from './pages/Auth';
+import Landing from './pages/Landing';
 import { CampaignProvider } from './context/CampaignContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoadingSpinner, OfflineIndicator } from './components/UI';
@@ -35,13 +36,12 @@ function ProtectedRoutes() {
     );
   }
 
-  // If not logged in, show Auth page but remember where they wanted to go
   if (!user) {
-    // If they're trying to access a protected route, save it for after login
-    if (location.pathname !== '/login' && location.pathname !== '/') {
-      sessionStorage.setItem('redirectAfterLogin', location.pathname);
-    }
-    return <Auth />;
+    if (location.pathname === '/') return <Landing />;
+    if (location.pathname === '/login') return <Auth />;
+    // Save destination and redirect to login
+    sessionStorage.setItem('redirectAfterLogin', location.pathname);
+    return <Navigate to="/login" replace />;
   }
 
   // Check if there's a saved redirect path after login
