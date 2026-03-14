@@ -43,29 +43,6 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
-  const signInWithGoogle = async (redirectPath = '/') => {
-    const safePath = redirectPath.startsWith('/') ? redirectPath : '/';
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}${safePath}`,
-        scopes: 'openid email profile https://mail.google.com/ https://www.googleapis.com/auth/gmail.send',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
-    return { data, error };
-  };
-
-  const isGoogleUser = (currentUser) => {
-    const target = currentUser || user;
-    if (!target) return false;
-    if (target.app_metadata?.provider === 'google') return true;
-    return Array.isArray(target.identities) && target.identities.some((i) => i.provider === 'google');
-  };
-
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     return { error };
@@ -83,10 +60,8 @@ export function AuthProvider({ children }) {
     loading,
     signUp,
     signIn,
-    signInWithGoogle,
     signOut,
     resetPassword,
-    isGoogleUser,
   };
 
   return (

@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Lock, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw, Clock } from 'lucide-react';
+import { Save, Eye, EyeOff, CheckCircle, AlertCircle, Shield, Server, Key, User, Info, Trash2, Cloud, Globe, Search, ExternalLink, XCircle, Loader2, RefreshCw, Clock } from 'lucide-react';
 import { Card, Button, Input, Alert, Badge, ConfirmDialog } from '../components/UI';
 import { smtpService } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { checkAllDNS, getProviderInstructions } from '../utils';
-import { supabase } from '../config/supabase';
 
 export default function Settings() {
-  const { user, signInWithGoogle, isGoogleUser } = useAuth();
+  const { user } = useAuth();
   const [config, setConfig] = useState({
     smtpHost: '',
     smtpPort: '587',
     emailUser: '',
     emailPass: '',
     senderName: 'Support Team',
-    authType: 'password',
-    googleAccessToken: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -31,18 +28,6 @@ export default function Settings() {
   const [dnsChecking, setDnsChecking] = useState(false);
   const [dnsError, setDnsError] = useState('');
   const [showInstructions, setShowInstructions] = useState(null);
-  const [googleConnecting, setGoogleConnecting] = useState(false);
-
-  const googleLinked = isGoogleUser(user);
-  const googleEmail = user?.email || '';
-
-  const getGoogleAuthErrorMessage = (err) => {
-    const raw = (err?.message || '').toLowerCase();
-    if (raw.includes('unsupported provider') || raw.includes('provider is not enabled')) {
-      return `Google connect is not enabled yet. Enable it in Supabase Dashboard -> Authentication -> Providers -> Google, and add redirect URL: ${window.location.origin}/settings`;
-    }
-    return err?.message || 'Failed to connect Google account';
-  };
 
   const loadConfig = useCallback(async () => {
     if (!user) {
@@ -60,11 +45,8 @@ export default function Settings() {
           emailUser: creds.emailUser || '',
           emailPass: creds.emailPass || '',
           senderName: creds.senderName || 'Support Team',
-          authType: creds.authType || 'password',
-          googleAccessToken: creds.googleAccessToken || '',
         });
-        const validAuth = creds.authType === 'google' ? !!creds.googleAccessToken : !!creds.emailPass;
-        setConfigured(!!(creds.smtpHost && creds.emailUser && validAuth));
+        setConfigured(!!(creds.smtpHost && creds.emailUser && creds.emailPass));
       }
     } catch (err) {
       console.error('Failed to load SMTP config:', err);
@@ -97,13 +79,8 @@ export default function Settings() {
       return;
     }
 
-    if (config.authType === 'google' && !config.googleAccessToken) {
-      setError('Google token missing. Reconnect your Google account and click Use Gmail SMTP.');
-      return;
-    }
-
-    if (config.authType !== 'google' && !config.emailPass) {
-      setError('App password is required for password-based SMTP mode.');
+    if (!config.emailPass) {
+      setError('App password is required.');
       return;
     }
 
@@ -122,55 +99,6 @@ export default function Settings() {
     }
   }
 
-  async function handleConnectGoogle() {
-    setError('');
-    setSuccess('');
-    setGoogleConnecting(true);
-    try {
-      const { error } = await signInWithGoogle('/settings');
-      if (error) throw error;
-    } catch (err) {
-      setError(getGoogleAuthErrorMessage(err));
-      setGoogleConnecting(false);
-    }
-  }
-
-  async function handleUseGoogleForSmtp() {
-    if (!googleEmail) {
-      setError('Google account email not found. Please reconnect your Google account.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const providerToken = data?.session?.provider_token || '';
-      if (!providerToken) {
-        setError('Google access token not found. Reconnect Google and grant permissions again to enable Gmail sending.');
-        return;
-      }
-
-      const googleConfig = {
-        smtpHost: 'smtp.gmail.com',
-        smtpPort: '587',
-        emailUser: googleEmail,
-        emailPass: '',
-        authType: 'google',
-        googleAccessToken: providerToken,
-        senderName: config.senderName || (user?.user_metadata?.full_name || 'Support Team'),
-      };
-
-      await smtpService.save(googleConfig);
-      setConfig(googleConfig);
-      setConfigured(true);
-      setSuccess('Gmail connected successfully. You can now send emails directly with your Google account.');
-    } catch (err) {
-      setError('Failed to enable Gmail sending: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function handleClear() {
     setClearConfirm(true);
   }
@@ -184,8 +112,6 @@ export default function Settings() {
         emailUser: '',
         emailPass: '',
         senderName: 'Support Team',
-        authType: 'password',
-        googleAccessToken: '',
       });
       setConfigured(false);
       setDnsResults(null);
@@ -284,32 +210,7 @@ export default function Settings() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                        <h4 className="text-sm font-semibold text-blue-900">Google Account</h4>
-                    <p className="text-xs text-blue-700 mt-1">
-                          Connect Google to send with Gmail directly, without app password.
-                    </p>
-                    {googleLinked && googleEmail && (
-                      <p className="text-xs text-blue-800 mt-2 font-medium">Connected: {googleEmail}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {!googleLinked ? (
-                      <Button type="button" variant="outline" onClick={handleConnectGoogle} loading={googleConnecting}>
-                        Connect Google
-                      </Button>
-                    ) : (
-                      <Button type="button" variant="outline" onClick={handleUseGoogleForSmtp}>
-                        Use Google Gmail
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sender Info Section */}
+            {/* Sender Info Section */}
               <div>
                 <h4 className="text-sm font-semibold text-stone-900 mb-4 flex items-center gap-2">
                   <User className="w-4 h-4 text-stone-500" />
@@ -363,7 +264,6 @@ export default function Settings() {
                     onChange={(e) => setConfig({ ...config, emailUser: e.target.value })}
                   />
 
-                  {config.authType !== 'google' && (
                   <div>
                     <label className="block text-sm font-medium text-stone-700 mb-1.5">
                       App Password
@@ -390,15 +290,6 @@ export default function Settings() {
                       For Gmail, use an App Password instead of your regular password
                     </p>
                   </div>
-                  )}
-
-                  {config.authType === 'google' && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                      <p className="text-xs text-emerald-700">
-                        Google OAuth mode enabled. No SMTP app password is required.
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
 

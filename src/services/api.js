@@ -4,20 +4,7 @@ import { supabase } from '../config/supabase';
 
 function hasUsableMailAuth(creds) {
   if (!creds?.smtpHost || !creds?.emailUser) return false;
-  if (creds.authType === 'google') return !!creds.googleAccessToken;
   return !!creds.emailPass;
-}
-
-async function withFreshGoogleToken(credentials) {
-  if (credentials.authType !== 'google') return credentials;
-
-  const { data } = await supabase.auth.getSession();
-  const providerToken = data?.session?.provider_token;
-
-  return {
-    ...credentials,
-    googleAccessToken: providerToken || credentials.googleAccessToken,
-  };
 }
 
 // Error types for better handling
@@ -112,10 +99,7 @@ async function fetchAPI(url, options = {}) {
 export const configAPI = {
   get: async () => {
     const creds = await smtpService.get();
-    const isConfigured = !!(creds?.smtpHost && creds?.emailUser && (
-      (creds.authType === 'google' && creds.googleAccessToken) ||
-      (creds.authType !== 'google' && creds.emailPass)
-    ));
+    const isConfigured = !!(creds?.smtpHost && creds?.emailUser && creds?.emailPass);
     return {
       configured: isConfigured,
       smtpHost: creds?.smtpHost || '',
@@ -142,21 +126,18 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
-      authType: creds.authType || 'password',
-      googleAccessToken: creds.googleAccessToken || null,
     };
-    const runtimeCredentials = await withFreshGoogleToken(credentials);
     // Use sendSingle endpoint with template content
     return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
       method: 'POST',
-      body: JSON.stringify({ 
-        email, 
+      body: JSON.stringify({
+        email,
         template: {
           subject: template.subject,
           body: template.body,
         },
         senderName: senderName || credentials.senderName,
-        credentials: runtimeCredentials,
+        credentials,
       }),
     });
   },
@@ -172,16 +153,13 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
-      authType: creds.authType || 'password',
-      googleAccessToken: creds.googleAccessToken || null,
     };
-    const runtimeCredentials = await withFreshGoogleToken(credentials);
     return fetchAPI(API_ENDPOINTS.SEND_TEST, {
       method: 'POST',
-      body: JSON.stringify({ 
-        email, 
+      body: JSON.stringify({
+        email,
         templateIndex,
-        credentials: runtimeCredentials,
+        credentials,
       }),
     });
   },
@@ -196,10 +174,7 @@ export const sendAPI = {
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
-      authType: creds.authType || 'password',
-      googleAccessToken: creds.googleAccessToken || null,
     };
-    const runtimeCredentials = await withFreshGoogleToken(credentials);
     return fetchAPI(API_ENDPOINTS.SEND_SINGLE, {
       method: 'POST',
       body: JSON.stringify({
@@ -209,7 +184,7 @@ export const sendAPI = {
           body: emailData.html
         },
         senderName: emailData.senderName || credentials.senderName || 'Support Team',
-        credentials: runtimeCredentials, // Include SMTP credentials
+        credentials,
       }),
     });
   },
@@ -240,22 +215,20 @@ export const campaignAPI = {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     
-    const runtimeCredentials = await withFreshGoogleToken({
+    const credentials = {
       smtpHost: creds.smtpHost,
       smtpPort: creds.smtpPort,
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
-      authType: creds.authType || 'password',
-      googleAccessToken: creds.googleAccessToken || null,
-    });
+    };
 
     return fetchAPI(API_ENDPOINTS.CAMPAIGN_START, {
       method: 'POST',
       body: JSON.stringify({
         contacts: options.contacts,
         template: options.template,
-        credentials: runtimeCredentials,
+        credentials,
         senderName: options.senderName || creds.senderName,
         delayMin: options.delayMin || 10000,
         delayMax: options.delayMax || 30000,
@@ -279,21 +252,19 @@ export const campaignAPI = {
       throw new Error('SMTP not configured. Please set up your credentials in Settings.');
     }
     
-    const runtimeCredentials = await withFreshGoogleToken({
+    const credentials = {
       smtpHost: creds.smtpHost,
       smtpPort: creds.smtpPort,
       emailUser: creds.emailUser,
       emailPass: creds.emailPass,
       senderName: creds.senderName,
-      authType: creds.authType || 'password',
-      googleAccessToken: creds.googleAccessToken || null,
-    });
+    };
 
     return fetchAPI(API_ENDPOINTS.CAMPAIGN_RESUME, {
       method: 'POST',
       body: JSON.stringify({
         campaignId,
-        credentials: runtimeCredentials,
+        credentials,
       }),
     });
   },

@@ -616,7 +616,6 @@ function SecuritySection() {
       items: [
         'Secure authentication via our secure authentication system',
         'Row-level security ensures you only see your data',
-        'JWT tokens for API authentication',
         'Session management with automatic expiry',
       ],
     },
